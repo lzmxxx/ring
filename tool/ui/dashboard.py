@@ -80,7 +80,7 @@ class Dashboard(QWidget):
         layout.addWidget(self.card_hr, 0, 1)
 
         # 3. PI & R Card
-        self.card_pi = MetricCard("灌注指数 (PI) / 比值 (R)", "%", "#FFD600")
+        self.card_pi = MetricCard("灌注指数 (PI) / 质量", "%", "#FFD600")
         layout.addWidget(self.card_pi, 0, 2)
 
         self.card_battery = MetricCard("电池状态", "%", "#7CFF6B")
@@ -106,14 +106,14 @@ class Dashboard(QWidget):
             sub_text = "算法窗正在收敛/运动伪影"
         self.card_spo2.set_value(spo2_val, sub_text, color)
 
-        # 2. Heart Rate (Time Domain primary, Frequency Domain in Subtitle, Rounded Integer)
-        hr_val = f"{round(pkt.hr_time)}"
-        hr_sub = f"频域 FFT: {round(pkt.hr_fft)} BPM" if pkt.valid else "时域/频域计算中..."
+        # 2. Heart Rate
+        hr_val = f"{round(pkt.hr)}"
+        hr_sub = f"RTC: {pkt.device_timestamp}" if pkt.device_timestamp else "RTC 未同步"
         self.card_hr.set_value(hr_val, hr_sub, "#FF5252" if pkt.valid else "#78909C")
 
-        # 3. PI & Ratio R
+        # 3. PI & signal quality
         pi_val = f"{pkt.pi:.2f}"
-        r_sub = f"R 比值: {pkt.ratio:.4f}  (标准: ~0.4-1.2)"
+        r_sub = f"质量: {pkt.quality}/100 | 温度预留: {pkt.temperature:.2f}°C"
         self.card_pi.set_value(pi_val, r_sub, "#FFD600")
 
         # 4. Status
@@ -130,9 +130,7 @@ class Dashboard(QWidget):
             color = "#7CFF6B" if pkt.capacity >= 20 else "#FF9100"
             self.card_battery.set_value(str(pkt.capacity), f"电压: {pkt.voltage_mv / 1000:.3f} V", color)
         else:
-            detail = (f"CW异常 ADDR=0x{pkt.cw_address:02X} ACK={pkt.cw_ack} "
-                      f"VER=0x{pkt.cw_version:02X} DEV={pkt.i2c_device_count}")
-            self.card_battery.set_value("--", detail, "#FF1744")
+            self.card_battery.set_value("--", "电量计数据无效", "#FF1744")
 
     def update_acceleration(self, pkt: AccelerationPacket):
         if pkt.valid:

@@ -125,6 +125,24 @@ void bsp_afe_power_off(void)
     GPIO_ResetBits(GPIOC, GPIO_PIN_13);
 }
 
+void bsp_status_led_on(void)
+{
+    GPIO_InitType gpio_init_struct;
+    RCC_EnableAPB2PeriphClk(RCC_APB2_PERIPH_GPIOA, ENABLE);
+    GPIO_SetBits(GPIOA, GPIO_PIN_6);
+    GPIO_InitStruct(&gpio_init_struct);
+    gpio_init_struct.Pin = GPIO_PIN_6;
+    gpio_init_struct.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init_struct.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_InitPeripheral(GPIOA, &gpio_init_struct);
+    GPIO_SetBits(GPIOA, GPIO_PIN_6);
+}
+
+void bsp_status_led_off(void)
+{
+    GPIO_ResetBits(GPIOA, GPIO_PIN_6);
+}
+
 /**
  * @brief  传感器硬件冷重启循环
  * @note   用于传感器死机或总线异常时的硬复位：

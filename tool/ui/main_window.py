@@ -6,6 +6,8 @@ Combines BLE Manager, Dashboard Cards, Real-time Charts, Data Recording, and Pac
 import os
 import sys
 import subprocess
+import csv
+import time
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QCheckBox, QTabWidget, QTableWidget, QTableWidgetItem,
@@ -15,7 +17,10 @@ from PyQt5.QtCore import Qt, pyqtSlot, QTimer
 from PyQt5.QtGui import QIcon, QColor, QFont
 
 from ble_client import BLEManager
-from protocol import SpO2Packet, BatteryPacket, AccelerationPacket, AlgorithmPacket, ProtocolStats
+from protocol import (
+    SpO2Packet, BatteryPacket, AccelerationPacket, AlgorithmPacket, ProtocolStats,
+    AckPacket, ErrorPacket, DeviceStatusPacket, RecordInfoPacket, HistoryRecordPacket, RawPPGPacket,
+)
 from data_recorder import DataRecorder
 from ui.dashboard import Dashboard
 from ui.chart_view import ChartView
@@ -27,6 +32,9 @@ class MainWindow(QMainWindow):
         self.ble = ble_manager
         self.stats = ProtocolStats()
         self.recorder = DataRecorder(default_dir=os.path.join(os.path.dirname(os.path.dirname(__file__)), "recordings"))
+        self.history_next_sequence = 0
+        self._history_file = None
+        self._history_writer = None
 
         self.setWindowTitle("SpO2-Ring BLE 上位机 (N32WB452 + IPA1322)")
         self.resize(1200, 820)
@@ -120,7 +128,10 @@ class MainWindow(QMainWindow):
         control_bar = self._build_control_bar()
         root_layout.addLayout(control_bar)
 
-        # 2. Digital Telemetry Cards (Dashboard)
+        # 2. Device work-mode and on-device record controls
+        root_layout.addLayout(self._build_device_control_bar())
+
+        # 3. Digital Telemetry Cards (Dashboard)
         self.dashboard = Dashboard()
         root_layout.addWidget(self.dashboard)
 
@@ -143,6 +154,35 @@ class MainWindow(QMainWindow):
 
         # 5. Status Bar
         self._build_status_bar()
+
+    def _build_device_control_bar(self) -> QHBoxLayout:
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        self.combo_mode = QComboBox()
+        self.combo_mode.addItem("仅原始 PPG", 0x01)
+        self.combo_mode.addItem("仅算法结果", 0x02)
+        self.combo_mode.addItem("原始 + 算法", 0x03)
+        self.combo_mode.setCurrentIndex(1)
+        self.combo_period = QComboBox()
+        self.combo_period.addItem("连续 / 1s", 1)
+        self.combo_period.addItem("15s 周期", 15)
+        self.combo_period.addItem("30s 周期", 30)
+        self.combo_period.addItem("60s 周期", 60)
+        for label, widget in (("工作模式", self.combo_mode), ("采集周期", self.combo_period)):
+            bar.addWidget(QLabel(label + ":")); bar.addWidget(widget)
+        self.btn_apply_mode = QPushButton("应用模式")
+        self.btn_device_start = QPushButton("开始设备记录")
+        self.btn_device_stop = QPushButton("停止设备记录")
+        self.btn_device_sync = QPushButton("同步历史")
+        self.btn_device_erase = QPushButton("清空设备记录")
+        for button in (self.btn_apply_mode,self.btn_device_start,self.btn_device_stop,self.btn_device_sync,self.btn_device_erase):
+            button.setStyleSheet("background:#1E293B;color:#E2E8F0;border:1px solid #475569;border-radius:4px;padding:5px 10px;")
+            bar.addWidget(button)
+        bar.addStretch()
+        self.lbl_device_info = QLabel("设备状态: 等待连接")
+        self.lbl_device_info.setStyleSheet("color:#94A3B8;font-size:12px;")
+        bar.addWidget(self.lbl_device_info)
+        return bar
 
     def _build_control_bar(self) -> QHBoxLayout:
         bar = QHBoxLayout()
@@ -392,6 +432,12 @@ class MainWindow(QMainWindow):
         self.ble.algorithm_received.connect(self._on_algorithm_received)
         self.ble.log_message.connect(self._append_log)
         self.ble.notify_state_changed.connect(self._on_notify_state_changed)
+        self.ble.ack_received.connect(self._on_ack_received)
+        self.ble.error_received.connect(self._on_error_received)
+        self.ble.device_status_received.connect(self._on_device_status)
+        self.ble.record_info_received.connect(self._on_record_info)
+        self.ble.history_received.connect(self._on_history_record)
+        self.ble.raw_received.connect(self._on_raw_received)
 
         self.chk_reconnect.toggled.connect(lambda checked: setattr(self.ble, "auto_reconnect", checked))
 
@@ -510,6 +556,59 @@ class MainWindow(QMainWindow):
 
     def _on_algorithm_received(self, pkt: AlgorithmPacket):
         self.dashboard.update_algorithms(pkt)
+
+    def _on_raw_received(self, pkt: RawPPGPacket):
+        self.chart_view.append_raw(pkt)
+
+    def _on_ack_received(self, pkt: AckPacket):
+        event_names = {1:"正在擦除",2:"记录区就绪",3:"记录已开始",4:"记录已停止",5:"记录已清空",6:"Flash已满",7:"同步结束"}
+        if pkt.event:
+            name = event_names.get(pkt.event, f"事件{pkt.event}")
+            self._append_log(f"设备事件: {name}，值={pkt.event_value}", "success" if pkt.event not in (1,6) else "warn")
+            if pkt.event == 7:
+                self._close_history_export()
+        else:
+            self._append_log(f"命令 0x{pkt.command:02X} 已确认", "success")
+
+    def _on_error_received(self, pkt: ErrorPacket):
+        self._append_log(f"设备拒绝命令 0x{pkt.command:02X}，错误码={pkt.error}", "error")
+
+    def _on_device_status(self, pkt: DeviceStatusPacket):
+        rtc = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(pkt.device_time)) if pkt.device_time else "未同步"
+        self.lbl_device_info.setText(f"状态={pkt.state} 模式={pkt.output_mode} 周期={pkt.sample_period}s RTC={rtc} 错误={pkt.error}")
+        mode_index = self.combo_mode.findData(pkt.output_mode)
+        period_index = self.combo_period.findData(pkt.sample_period)
+        if mode_index >= 0: self.combo_mode.setCurrentIndex(mode_index)
+        if period_index >= 0: self.combo_period.setCurrentIndex(period_index)
+
+    def _on_record_info(self, pkt: RecordInfoPacket):
+        percent = (100.0 * pkt.flash_used / pkt.flash_total) if pkt.flash_total else 0.0
+        self.history_next_sequence = min(self.history_next_sequence, pkt.record_count)
+        self.lbl_device_info.setText(f"记录 {pkt.record_count} 条 | Session {pkt.session_id} | Flash {percent:.1f}%")
+        self._append_log(f"设备记录信息: {pkt.record_count} 条，Flash {pkt.flash_used}/{pkt.flash_total} B", "info")
+
+    def start_history_export(self):
+        os.makedirs(self.recorder.output_dir, exist_ok=True)
+        path = os.path.join(self.recorder.output_dir, f"SpO2_Ring_History_{time.strftime('%Y%m%d_%H%M%S')}.csv")
+        self._history_file = open(path, "w", newline="", encoding="utf-8-sig")
+        self._history_writer = csv.writer(self._history_file)
+        self._history_writer.writerow(["Timestamp","DateTime","SpO2","HR","Motion","Quality","Temperature","Sequence","Flags"])
+        self.history_next_sequence = 0
+        self._append_log(f"历史同步保存至: {path}", "success")
+        return path
+
+    def _on_history_record(self, pkt: HistoryRecordPacket):
+        if self._history_writer is None: self.start_history_export()
+        dt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(pkt.timestamp))
+        self._history_writer.writerow([pkt.timestamp,dt,pkt.spo2,pkt.heart_rate,"Moving" if pkt.motion else "Static",pkt.quality,f"{pkt.temperature:.2f}",pkt.sequence,pkt.flags])
+        self.history_next_sequence = pkt.sequence + 1
+        if self.history_next_sequence % 20 == 0: self._history_file.flush()
+        self.lbl_device_info.setText(f"历史同步中: 已接收 {self.history_next_sequence} 条")
+
+    def _close_history_export(self):
+        if self._history_file:
+            self._history_file.flush(); self._history_file.close()
+            self._history_file = None; self._history_writer = None
 
     def _add_packet_table_row(self, pkt: SpO2Packet):
         # Limit rows to 100

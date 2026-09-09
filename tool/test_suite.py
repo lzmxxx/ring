@@ -7,7 +7,11 @@ import os
 import struct
 import tempfile
 import unittest
-from protocol import parse_packet, ProtocolStats, SpO2Packet, BatteryPacket, AccelerationPacket, AlgorithmPacket
+from protocol import (
+    parse_packet, ProtocolStats, ProtocolDecoder, SpO2Packet, BatteryPacket,
+    AccelerationPacket, AlgorithmPacket, DeviceStatusPacket, build_command,
+    CMD_TIME_SYNC, CMD_GET_DEVICE_STATUS, crc16_ccitt,
+)
 from data_recorder import DataRecorder
 
 
@@ -15,11 +19,8 @@ class TestSpO2Protocol(unittest.TestCase):
     def test_pack_and_parse_valid(self):
         # Header A5 01, flags=0x01 (valid), reserved=0, seq=100
         # spo2=9850 (98.5%), hr=720 (72.0 BPM), pi=210 (2.10%), ratio=5420 (0.5420), hr_time=715 (71.5), hr_fft=725 (72.5)
-        raw_bytes = struct.pack(
-            '<BBBB I H H H H H H',
-            0xA5, 0x01, 0x05, 0x00, 100,
-            9850, 720, 210, 5420, 715, 725
-        )
+        raw_bytes = struct.pack('<BBBBIIHHHh', 0xA5, 0x01, 0x05, 88, 100,
+                                1700000000, 9850, 720, 210, 0)
         self.assertEqual(len(raw_bytes), 20)
 
         ok, pkt, err = parse_packet(raw_bytes, recv_time=1700000000.123)
@@ -32,9 +33,25 @@ class TestSpO2Protocol(unittest.TestCase):
         self.assertAlmostEqual(pkt.spo2, 98.5, places=2)
         self.assertAlmostEqual(pkt.hr, 72.0, places=1)
         self.assertAlmostEqual(pkt.pi, 2.10, places=2)
-        self.assertAlmostEqual(pkt.ratio, 0.5420, places=4)
-        self.assertAlmostEqual(pkt.hr_time, 71.5, places=1)
-        self.assertAlmostEqual(pkt.hr_fft, 72.5, places=1)
+        self.assertEqual(pkt.device_timestamp, 1700000000)
+        self.assertEqual(pkt.quality, 88)
+        self.assertAlmostEqual(pkt.hr_time, 72.0, places=1)
+
+    def test_application_command_crc(self):
+        raw = build_command(CMD_TIME_SYNC, 7, struct.pack('<Ih', 1700000000, 480))
+        self.assertEqual(len(raw), 16)
+        self.assertEqual(struct.unpack_from('<H', raw, len(raw) - 2)[0], crc16_ccitt(raw[:-2]))
+
+    def test_segmented_device_status(self):
+        decoder = ProtocolDecoder()
+        joined = struct.pack('<BBHBBhII', 3, 2, 15, 0x1F, 0, 480, 0x20260909, 1700000000)
+        def response(part):
+            payload = bytes((part, 2)) + joined[part * 8:(part + 1) * 8]
+            return build_command(CMD_GET_DEVICE_STATUS, 9, payload)
+        self.assertIsNone(decoder.feed(response(0)))
+        packet = decoder.feed(response(1))
+        self.assertIsInstance(packet, DeviceStatusPacket)
+        self.assertEqual(packet.sample_period, 15)
 
     def test_invalid_header_or_size(self):
         # Short packet

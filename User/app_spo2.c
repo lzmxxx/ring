@@ -183,6 +183,7 @@ static void spo2_thread_entry(void *parameter)
 
         calculated_result.timestamp = app_device_rtc_now();
         calculated_result.motion = SC7A20_GetAndClearMotion();
+        app_device_set_motion_state(calculated_result.motion ? RT_TRUE : RT_FALSE);
         calculated_result.temperature = 0;
         calculated_result.quality = (calculated_result.time_valid && calculated_result.fft_valid) ? 100U :
                                     ((calculated_result.time_valid || calculated_result.fft_valid) ? 60U : 20U);

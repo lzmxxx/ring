@@ -17,6 +17,11 @@ if current_dir not in sys.path:
 
 from ble_client import BLEManager
 from ui.main_window import MainWindow
+from protocol import (
+    CMD_SET_OUTPUT_MODE, CMD_SET_SAMPLE_PERIOD, CMD_START_RECORD,
+    CMD_STOP_RECORD, CMD_SYNC_RECORD, CMD_ERASE_RECORD, CMD_GET_RECORD_INFO,
+)
+import struct
 
 
 def main():
@@ -96,12 +101,33 @@ def main():
     window.btn_connect.clicked.connect(lambda checked=False: on_connect_clicked())
     window.btn_sim.clicked.connect(lambda checked=False: on_sim_clicked())
 
+    async def apply_device_mode():
+        await ble_manager.send_command(CMD_SET_OUTPUT_MODE, bytes((window.combo_mode.currentData(),)))
+        await ble_manager.send_command(CMD_SET_SAMPLE_PERIOD, struct.pack('<H', window.combo_period.currentData()))
+
+    async def start_device_record():
+        await ble_manager.sync_time()
+        await ble_manager.send_command(CMD_START_RECORD)
+
+    async def sync_device_history():
+        if window._history_writer is None:
+            window.start_history_export()
+        await ble_manager.send_command(CMD_GET_RECORD_INFO)
+        await ble_manager.send_command(CMD_SYNC_RECORD, struct.pack('<H', window.history_next_sequence & 0xFFFF))
+
+    window.btn_apply_mode.clicked.connect(lambda checked=False: loop.create_task(apply_device_mode()))
+    window.btn_device_start.clicked.connect(lambda checked=False: loop.create_task(start_device_record()) if QMessageBox.question(window,"开始设备记录","开始新的记录将清除设备中的历史数据，是否继续？",QMessageBox.Yes|QMessageBox.No)==QMessageBox.Yes else None)
+    window.btn_device_stop.clicked.connect(lambda checked=False: loop.create_task(ble_manager.send_command(CMD_STOP_RECORD)))
+    window.btn_device_sync.clicked.connect(lambda checked=False: loop.create_task(sync_device_history()))
+    window.btn_device_erase.clicked.connect(lambda checked=False: loop.create_task(ble_manager.send_command(CMD_ERASE_RECORD)) if QMessageBox.question(window,"清空设备记录","此操作不可恢复，是否清空？",QMessageBox.Yes|QMessageBox.No)==QMessageBox.Yes else None)
+
     # Clean cleanup on window close
     def close_event_handler(event):
         if ble_manager.is_connected:
             loop.create_task(ble_manager.disconnect())
         if window.recorder.is_recording:
             window.recorder.stop()
+        window._close_history_export()
         loop.stop()
         event.accept()
 

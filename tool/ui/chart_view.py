@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QCom
 from PyQt5.QtCore import Qt
 import pyqtgraph as pg
 
-from protocol import SpO2Packet
+from protocol import SpO2Packet, RawPPGPacket
 
 
 class ChartView(QWidget):
@@ -29,6 +29,9 @@ class ChartView(QWidget):
         self.hr_fft_data = deque(maxlen=600)
         self.pi_data = deque(maxlen=600)
         self.ratio_data = deque(maxlen=600)
+        self.raw_x = deque(maxlen=1500)
+        self.raw_red = deque(maxlen=1500)
+        self.raw_ir = deque(maxlen=1500)
 
         self._init_ui()
 
@@ -103,8 +106,16 @@ class ChartView(QWidget):
         self.win.setStyleSheet("border: 1px solid #2D3345; border-radius: 6px;")
         layout.addWidget(self.win)
 
+        # --- PLOT 0: Raw dual-channel PPG ---
+        self.plot_raw = self.win.addPlot(row=0, col=0)
+        self.plot_raw.setTitle("<span style='color:#38BDF8;font-size:13px;font-weight:bold;'>原始 PPG（660nm / 905nm）</span>")
+        self.plot_raw.showGrid(x=True, y=True, alpha=0.25)
+        self.plot_raw.addLegend(offset=(10, 10))
+        self.curve_raw_red = self.plot_raw.plot(pen=pg.mkPen("#EF4444", width=1.2), name="660nm")
+        self.curve_raw_ir = self.plot_raw.plot(pen=pg.mkPen("#38BDF8", width=1.2), name="905nm")
+
         # --- PLOT 1: SpO2 Trend ---
-        self.plot_spo2 = self.win.addPlot(row=0, col=0)
+        self.plot_spo2 = self.win.addPlot(row=1, col=0)
         self.plot_spo2.setTitle("<span style='color: #00E676; font-size: 13px; font-weight: bold;'>血氧饱和度 SpO2 (%)</span>")
         self.plot_spo2.showGrid(x=True, y=True, alpha=0.25)
         self.plot_spo2.setYRange(85, 101, padding=0)
@@ -125,8 +136,8 @@ class ChartView(QWidget):
         )
 
         # --- PLOT 2: Time-Domain & Frequency-Domain Heart Rate ---
-        self.plot_hr = self.win.addPlot(row=1, col=0)
-        self.plot_hr.setTitle("<span style='color: #FF5252; font-size: 13px; font-weight: bold;'>心率 HR (时域自相关 / 频域 FFT)</span>")
+        self.plot_hr = self.win.addPlot(row=2, col=0)
+        self.plot_hr.setTitle("<span style='color: #FF5252; font-size: 13px; font-weight: bold;'>心率 HR</span>")
         self.plot_hr.showGrid(x=True, y=True, alpha=0.25)
         self.plot_hr.setYRange(40, 160, padding=0.1)
         self.plot_hr.getAxis("left").setLabel("心率", units="BPM")
@@ -138,7 +149,7 @@ class ChartView(QWidget):
             symbol='o',
             symbolSize=4,
             symbolBrush='#FF5252',
-            name="HR_time (时域自相关)"
+            name="HR"
         )
         self.curve_hr_fft = self.plot_hr.plot(
             pen=pg.mkPen(color="#42A5F5", width=2.0, style=Qt.DashLine),
@@ -149,7 +160,7 @@ class ChartView(QWidget):
         )
 
         # --- PLOT 3: PI & R Ratio ---
-        self.plot_pi_r = self.win.addPlot(row=2, col=0)
+        self.plot_pi_r = self.win.addPlot(row=3, col=0)
         self.plot_pi_r.setTitle("<span style='color: #FFD600; font-size: 13px; font-weight: bold;'>灌注指数 PI (%) 与 光路比值 R</span>")
         self.plot_pi_r.showGrid(x=True, y=True, alpha=0.25)
         self.plot_pi_r.getAxis("left").setLabel("PI / Ratio")
@@ -175,12 +186,22 @@ class ChartView(QWidget):
         self.x_data.append(x_val)
         self.spo2_data.append(round(pkt.spo2))
         self.hr_data.append(round(pkt.hr))
-        self.hr_time_data.append(round(pkt.hr_time))
-        self.hr_fft_data.append(round(pkt.hr_fft))
+        self.hr_time_data.append(round(pkt.hr))
+        self.hr_fft_data.append(round(pkt.hr_fft) if pkt.hr_fft else float('nan'))
         self.pi_data.append(pkt.pi)
         self.ratio_data.append(pkt.ratio)
 
         self._refresh_plots()
+
+    def append_raw(self, pkt: RawPPGPacket):
+        if self.is_paused:
+            return
+        for index, (red, ir) in enumerate(pkt.samples):
+            self.raw_x.append(pkt.first_seq + index)
+            self.raw_red.append(red)
+            self.raw_ir.append(ir)
+        self.curve_raw_red.setData(list(self.raw_x), list(self.raw_red))
+        self.curve_raw_ir.setData(list(self.raw_x), list(self.raw_ir))
 
     def _refresh_plots(self):
         if not self.x_data:
@@ -233,8 +254,13 @@ class ChartView(QWidget):
         self.hr_fft_data.clear()
         self.pi_data.clear()
         self.ratio_data.clear()
+        self.raw_x.clear()
+        self.raw_red.clear()
+        self.raw_ir.clear()
         self.curve_spo2.clear()
         self.curve_hr_time.clear()
         self.curve_hr_fft.clear()
         self.curve_pi.clear()
         self.curve_ratio.clear()
+        self.curve_raw_red.clear()
+        self.curve_raw_ir.clear()

@@ -1,28 +1,14 @@
-"""
-SpO2 Ring 20-byte BLE Packet Protocol Decoder & Statistics
-Device: N32WB452 + IPA1322 RT-Thread Pulse Oximeter Ring
+"""SpO2 Ring BLE protocol decoder and statistics.
 
-Packet Format (20 Bytes, Little-Endian):
-  Byte 0..1:   Header 0xA5 0x01
-  Byte 2:      Flags (bit 0: valid, bit 1: calibrated, bit 2: moving)
-  Byte 3:      Reserved (0x00)
-  Byte 4..7:   Seq (uint32)
-  Byte 8..9:   SpO2 * 100 (uint16, %)
-  Byte 10..11: HR * 10 (uint16, BPM)
-  Byte 12..13: PI * 100 (uint16, %)
-  Byte 14..15: Ratio (R) * 10000 (uint16)
-  Byte 16..17: HR_time * 10 (uint16, BPM)
-  Byte 18..19: HR_freq (FFT) * 10 (uint16, BPM)
-
-Battery packet A5 02: flags, capacity %, voltage mV and associated SpO2 seq.
-Acceleration packet A5 03: valid flag, seq and signed X/Y/Z acceleration in mg.
-Independent algorithm packet A5 05: time/FFT/DST SpO2 and R values.
+The current firmware sends fixed 20-byte A5 result, battery and raw-PPG
+packets, plus AA55 control frames protected by CRC16.  A5 acceleration and
+independent-algorithm parsing remains read-only compatibility for old captures.
 """
 
 import struct
 import time
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 
 @dataclass
@@ -40,6 +26,9 @@ class SpO2Packet:
     hr_time: float            # Time-domain Autocorrelation HR (BPM)
     hr_fft: float             # Frequency-domain FFT HR (BPM)
     moving: bool = False      # SC7A20 internal motion decision
+    device_timestamp: int = 0 # RTC Unix time reported by the ring
+    quality: int = 0          # 0..100 signal quality hint
+    temperature: float = 0.0  # reserved, degrees Celsius
 
 
 @dataclass
@@ -51,15 +40,6 @@ class BatteryPacket:
     valid: bool
     capacity: int             # %
     voltage_mv: int           # mV
-    cw_ack: int = 0xFF
-    cw_version: int = 0xFF
-    cw_init: int = 0xFF
-    imu_id: int = 0xFF
-    imu_config: int = 0
-    imu_init: int = 0xFF
-    cw_address: int = 0xFF
-    i2c_device_count: int = 0
-    motion_irq_count: int = 0
 
 
 @dataclass
@@ -90,6 +70,68 @@ class AlgorithmPacket:
     ratio_time: float
     ratio_fft: float
     ratio_dst: float
+
+
+@dataclass
+class RawPPGPacket:
+    timestamp: float
+    time_str: str
+    raw_hex: str
+    first_seq: int
+    sample_rate: int
+    device_timestamp: int
+    samples: Tuple[Tuple[int, int], ...]
+
+
+@dataclass
+class AckPacket:
+    command: int
+    sequence: int
+    value0: int = 0
+    value1: int = 0
+    event: int = 0
+    event_value: int = 0
+
+
+@dataclass
+class ErrorPacket:
+    command: int
+    sequence: int
+    error: int
+
+
+@dataclass
+class DeviceStatusPacket:
+    state: int
+    output_mode: int
+    sample_period: int
+    flags: int
+    error: int
+    timezone_min: int
+    firmware_version: int
+    device_time: int
+
+
+@dataclass
+class RecordInfoPacket:
+    session_id: int
+    record_count: int
+    first_timestamp: int
+    last_timestamp: int
+    flash_used: int
+    flash_total: int
+
+
+@dataclass
+class HistoryRecordPacket:
+    timestamp: int
+    sequence: int
+    spo2: int
+    heart_rate: int
+    motion: int
+    quality: int
+    temperature: float
+    flags: int
 
 
 class ProtocolStats:
@@ -177,7 +219,7 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
     if len(data) != PACKET_SIZE:
         return False, None, f"Incorrect packet length {len(data)} (expected {PACKET_SIZE})"
 
-    if data[0] != 0xA5 or data[1] not in (0x01, 0x02, 0x03, 0x05):
+    if data[0] != 0xA5 or data[1] not in (0x01, 0x02, 0x03, 0x04, 0x05):
         return False, None, f"Invalid packet header/type: {data[:2].hex().upper()}"
 
     if recv_time is None:
@@ -194,8 +236,6 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
         return True, BatteryPacket(
             recv_time, time_str, data.hex(' ').upper(), seq,
             bool(flags & 0x01), capacity, voltage_mv,
-            data[10], data[11], data[12], data[13], data[14], data[15],
-            data[16], data[17], struct.unpack_from('<H', data, 18)[0]
         ), ""
 
     if data[1] == 0x03:
@@ -204,6 +244,15 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
         return True, AccelerationPacket(
             recv_time, time_str, data.hex(' ').upper(), seq,
             bool(data[2] & 0x01), x_mg, y_mg, z_mg
+        ), ""
+
+    if data[1] == 0x04:
+        first_seq = struct.unpack_from('<I', data, 4)[0]
+        device_timestamp = struct.unpack_from('<I', data, 8)[0]
+        red0, ir0, red1, ir1 = struct.unpack_from('<hhhh', data, 12)
+        return True, RawPPGPacket(
+            recv_time, time_str, data.hex(' ').upper(), first_seq, data[3], device_timestamp,
+            ((red0 << 4, ir0 << 4), (red1 << 4, ir1 << 4))
         ), ""
 
     if data[1] == 0x05:
@@ -217,12 +266,9 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
             values[4] / 10000.0, values[5] / 10000.0,
         ), ""
 
-    try:
-        h0, h1, flags, resv, seq, spo2_raw, hr_raw, pi_raw, ratio_raw, hr_time_raw, hr_fft_raw = struct.unpack(
-            PACKET_STRUCT, data
-        )
-    except Exception as e:
-        return False, None, f"Unpack error: {e}"
+    flags, quality = data[2], data[3]
+    seq, device_timestamp = struct.unpack_from('<II', data, 4)
+    spo2_raw, hr_raw, pi_raw, temperature_raw = struct.unpack_from('<HHHh', data, 12)
 
     valid = bool(flags & 0x01)
     calibrated = bool(flags & 0x02)
@@ -231,9 +277,9 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
     spo2 = spo2_raw / 100.0
     hr = hr_raw / 10.0
     pi = pi_raw / 100.0
-    ratio = ratio_raw / 10000.0
-    hr_time = hr_time_raw / 10.0
-    hr_fft = hr_fft_raw / 10.0
+    ratio = 0.0
+    hr_time = hr
+    hr_fft = 0.0
 
     pkt = SpO2Packet(
         timestamp=recv_time,
@@ -249,5 +295,87 @@ def parse_packet(data: bytes, recv_time: Optional[float] = None) -> Tuple[bool, 
         hr_time=hr_time,
         hr_fft=hr_fft,
         moving=moving,
+        device_timestamp=device_timestamp,
+        quality=quality,
+        temperature=temperature_raw / 100.0,
     )
     return True, pkt, ""
+
+
+SOF = b'\xAA\x55'
+PROTOCOL_VERSION = 1
+CMD_TIME_SYNC = 0x01
+CMD_SET_OUTPUT_MODE = 0x10
+CMD_SET_SAMPLE_PERIOD = 0x11
+CMD_START_RECORD = 0x20
+CMD_STOP_RECORD = 0x21
+CMD_GET_RECORD_INFO = 0x22
+CMD_SYNC_RECORD = 0x23
+CMD_ERASE_RECORD = 0x24
+CMD_GET_DEVICE_STATUS = 0x30
+CMD_SET_MOTION_PARAMETER = 0x40
+CMD_ACK = 0x80
+CMD_ERROR = 0x81
+
+
+def crc16_ccitt(data: bytes) -> int:
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc
+
+
+def build_command(command: int, sequence: int, payload: bytes = b'') -> bytes:
+    if len(payload) > 10:
+        raise ValueError("application payload must fit one 20-byte BLE packet")
+    frame = SOF + bytes((PROTOCOL_VERSION, command)) + struct.pack('<HH', sequence & 0xFFFF, len(payload)) + payload
+    return frame + struct.pack('<H', crc16_ccitt(frame))
+
+
+class ProtocolDecoder:
+    """Stateful decoder for segmented status, record-info and history frames."""
+    def __init__(self):
+        self._parts: Dict[Tuple[int, int], Dict[int, bytes]] = {}
+
+    def feed(self, data: bytes):
+        if data.startswith(b'\xA5'):
+            ok, packet, error = parse_packet(data)
+            return packet if ok else ErrorPacket(0, 0, 0xFF)
+        if len(data) < 10 or data[:2] != SOF:
+            return None
+        version, command = data[2], data[3]
+        sequence, payload_len = struct.unpack_from('<HH', data, 4)
+        if version != PROTOCOL_VERSION or payload_len > 10 or len(data) != payload_len + 10:
+            return None
+        if crc16_ccitt(data[:-2]) != struct.unpack_from('<H', data, len(data) - 2)[0]:
+            return None
+        payload = data[8:-2]
+        if command == CMD_ACK and len(payload) >= 2:
+            if payload[0] == 0xFF and len(payload) == 7:
+                return AckPacket(0xFF, sequence, event=payload[2], event_value=struct.unpack_from('<I', payload, 3)[0])
+            return AckPacket(payload[0], sequence, payload[2] if len(payload) > 2 else 0, payload[3] if len(payload) > 3 else 0)
+        if command == CMD_ERROR and len(payload) >= 2:
+            return ErrorPacket(payload[0], sequence, payload[1])
+        if command in (CMD_GET_DEVICE_STATUS, CMD_GET_RECORD_INFO, CMD_SYNC_RECORD) and len(payload) >= 2:
+            part, total = payload[0], payload[1]
+            key = (command, sequence)
+            bucket = self._parts.setdefault(key, {})
+            bucket[part] = payload[2:]
+            if len(bucket) < total:
+                return None
+            joined = b''.join(bucket[i] for i in range(total))
+            del self._parts[key]
+            if command == CMD_GET_DEVICE_STATUS and len(joined) == 16:
+                state, mode, period, flags, error, timezone = struct.unpack_from('<BBHBBh', joined, 0)
+                firmware, device_time = struct.unpack_from('<II', joined, 8)
+                return DeviceStatusPacket(state, mode, period, flags, error, timezone, firmware, device_time)
+            if command == CMD_GET_RECORD_INFO and len(joined) == 24:
+                return RecordInfoPacket(*struct.unpack('<IIIIII', joined))
+            if command == CMD_SYNC_RECORD and len(joined) == 16:
+                timestamp, record_seq, spo2, hr, motion, quality, temp, flags, _reserved, crc = struct.unpack('<IHBBBBhBBH', joined)
+                if crc16_ccitt(joined[:14]) != crc:
+                    return ErrorPacket(CMD_SYNC_RECORD, sequence, 0xFE)
+                return HistoryRecordPacket(timestamp, record_seq, spo2, hr, motion, quality, temp / 100.0, flags)
+        return None

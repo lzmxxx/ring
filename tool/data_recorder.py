@@ -54,7 +54,10 @@ class DataRecorder:
             "Motion_State",
             "Battery_%",
             "Battery_mV",
-            "Raw_Hex"
+            "Raw_Hex",
+            "Device_Timestamp",
+            "Quality",
+            "Temperature_C",
         ])
         self._file.flush()
 
@@ -88,7 +91,10 @@ class DataRecorder:
             "Moving" if pkt.moving else "Still",
             "",
             "",
-            pkt.raw_hex
+            pkt.raw_hex,
+            pkt.device_timestamp,
+            pkt.quality,
+            f"{pkt.temperature:.2f}"
         ])
         self.recorded_count += 1
         
@@ -106,7 +112,7 @@ class DataRecorder:
             dt_str, f"{pkt.timestamp:.3f}", "Battery", pkt.seq,
             1 if pkt.valid else 0, "", "", "", "", "", "", "", "",
             pkt.capacity if pkt.valid else "", pkt.voltage_mv if pkt.valid else "",
-            pkt.raw_hex
+            pkt.raw_hex, "", "", ""
         ])
         self.recorded_count += 1
 

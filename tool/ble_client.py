@@ -11,7 +11,11 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
-from protocol import parse_packet, SpO2Packet, BatteryPacket, AccelerationPacket, AlgorithmPacket
+from protocol import (
+    ProtocolDecoder, SpO2Packet, BatteryPacket, AccelerationPacket, AlgorithmPacket,
+    RawPPGPacket, AckPacket, ErrorPacket, DeviceStatusPacket, RecordInfoPacket,
+    HistoryRecordPacket, build_command, CMD_TIME_SYNC, CMD_GET_DEVICE_STATUS, CMD_GET_RECORD_INFO,
+)
 
 logger = logging.getLogger("BLEClient")
 
@@ -31,6 +35,12 @@ class BLEManager(QObject):
     algorithm_received = pyqtSignal(object)       # AlgorithmPacket instance
     log_message = pyqtSignal(str, str)            # text, level ("info", "warn", "error", "success")
     notify_state_changed = pyqtSignal(bool, str)  # is_notifying, char_uuid
+    raw_received = pyqtSignal(object)
+    ack_received = pyqtSignal(object)
+    error_received = pyqtSignal(object)
+    device_status_received = pyqtSignal(object)
+    record_info_received = pyqtSignal(object)
+    history_received = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,6 +53,8 @@ class BLEManager(QObject):
         self._discovered_devices: Dict[str, BLEDevice] = {}
         self._sim_task: Optional[asyncio.Task] = None
         self.is_simulation: bool = False
+        self._decoder = ProtocolDecoder()
+        self._command_sequence: int = 0
 
     @property
     def is_connected(self) -> bool:
@@ -114,6 +126,9 @@ class BLEManager(QObject):
                 await self.client.start_notify(notify_char.uuid, self._on_notification)
                 self.notify_state_changed.emit(True, notify_char.uuid)
                 self.log_message.emit("已成功启用通知 (CCC 0x0001)，等待血氧结果包...", "success")
+                await self.sync_time()
+                await self.send_command(CMD_GET_DEVICE_STATUS)
+                await self.send_command(CMD_GET_RECORD_INFO)
             else:
                 self.log_message.emit("未找到匹配的 Notify 特征通道，请检查固件 GATT 设置！", "warn")
 
@@ -164,18 +179,35 @@ class BLEManager(QObject):
 
     def _on_notification(self, characteristic, data: bytearray):
         """Bleak notification callback receiving raw 20-byte bytes."""
-        success, pkt, err_msg = parse_packet(bytes(data))
-        if success and pkt:
-            if isinstance(pkt, BatteryPacket):
-                self.battery_received.emit(pkt)
-            elif isinstance(pkt, AccelerationPacket):
-                self.acceleration_received.emit(pkt)
-            elif isinstance(pkt, AlgorithmPacket):
-                self.algorithm_received.emit(pkt)
-            else:
-                self.packet_received.emit(pkt)
-        else:
-            self.log_message.emit(f"收到异常报文 ({len(data)}B): {bytes(data).hex().upper()} - {err_msg}", "warn")
+        pkt = self._decoder.feed(bytes(data))
+        if isinstance(pkt, BatteryPacket): self.battery_received.emit(pkt)
+        elif isinstance(pkt, AccelerationPacket): self.acceleration_received.emit(pkt)
+        elif isinstance(pkt, AlgorithmPacket): self.algorithm_received.emit(pkt)
+        elif isinstance(pkt, SpO2Packet): self.packet_received.emit(pkt)
+        elif isinstance(pkt, RawPPGPacket): self.raw_received.emit(pkt)
+        elif isinstance(pkt, AckPacket): self.ack_received.emit(pkt)
+        elif isinstance(pkt, ErrorPacket): self.error_received.emit(pkt)
+        elif isinstance(pkt, DeviceStatusPacket): self.device_status_received.emit(pkt)
+        elif isinstance(pkt, RecordInfoPacket): self.record_info_received.emit(pkt)
+        elif isinstance(pkt, HistoryRecordPacket): self.history_received.emit(pkt)
+        elif pkt is None and not bytes(data).startswith(b'\xAA\x55'):
+            self.log_message.emit(f"收到无法识别的报文: {bytes(data).hex().upper()}", "warn")
+
+    async def send_command(self, command: int, payload: bytes = b''):
+        if not self.is_connected or not self.connected_char_uuid:
+            raise RuntimeError("设备尚未连接并订阅")
+        self._command_sequence = (self._command_sequence + 1) & 0xFFFF
+        frame = build_command(command, self._command_sequence, payload)
+        await self.client.write_gatt_char(self.connected_char_uuid, frame, response=False)
+        return self._command_sequence
+
+    async def sync_time(self):
+        import datetime
+        import struct
+        now = datetime.datetime.now().astimezone()
+        timezone_min = int(now.utcoffset().total_seconds() // 60)
+        await self.send_command(CMD_TIME_SYNC, struct.pack('<Ih', int(now.timestamp()), timezone_min))
+        self.log_message.emit(f"已自动同步设备 RTC（时区 {timezone_min:+d} 分钟）", "success")
 
     async def disconnect(self):
         """Disconnect active BLE connection."""

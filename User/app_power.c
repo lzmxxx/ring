@@ -231,6 +231,9 @@ rt_bool_t app_power_boot_check(void)
     /* 清除待机与唤醒标志 */
     PWR_ClearFlag(PWR_SB_FLAG | PWR_WU_FLAG);
 
+    /* 达到长按门限立即点亮确认灯，再等待用户松手。 */
+    bsp_status_led_on();
+
     /* 必须等待物理按键释放，防止关机计时器被立即触发 */
     while (GPIO_ReadInputDataBit(GPIOA, GPIO_PIN_0) == Bit_SET)
     {
@@ -316,6 +319,7 @@ void app_power_off(void)
 {
     g_power_off_stage = 1U;
     app_shutdown      = RT_TRUE;
+    bsp_status_led_off();
     app_power_lock(PM_SYSTEM);
 
     /* 1. 停止 PPG 采集与算法 */
@@ -373,6 +377,7 @@ static void key_timeout_callback(void *parameter)
     /* 达到 2000ms，触发关机信号量 */
     g_key_shutdown_count++;
     app_shutdown = RT_TRUE;
+    bsp_status_led_off();
     key_timing   = RT_FALSE;
     rt_timer_stop(&key_timer);
     rt_sem_release(&power_sem);

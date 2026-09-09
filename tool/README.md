@@ -1,99 +1,71 @@
-# SpO2-Ring BLE 上位机使用说明
+# SpO2-Ring BLE 上位机
 
-本上位机专为 **N32WB452 + IPA1322 + RT-Thread** 血氧戒指量身定制，使用 Python 3 + PyQt5 + PyQtGraph + Bleak 构建，运行在现有的 Conda `pyqt` 环境下。
+上位机使用 Python、PyQt5、PyQtGraph、Bleak 和 qasync，实现戒指的实时显示、配置、设备端记录和历史数据导出。
 
----
+## 启动
 
-## 快速启动
+双击 `run.bat`，或在工程根目录执行：
 
-### 方式一：双击启动（最便捷）
-直接在资源管理器中双击运行 `tool/run.bat` 即可一键启动上位机。
-
-### 方式二：命令行启动
-打开命令行并激活 conda 环境：
-```powershell
-conda activate pyqt
-cd tool
-python main.py
-```
-或直接指定 conda python 解释器执行：
 ```powershell
 D:\software\anaconda3\envs\pyqt\python.exe tool\main.py
 ```
 
----
+连接 `SpO2-Ring` 后，程序会订阅 FEE7 服务的 FFF5 Notify 特征，自动发送 RTC 时间与时区，随后读取设备状态和记录信息。
 
-## 核心功能
+## 界面功能
 
-1. **BLE 设备扫描与一键直连**：
-   - 点击 **[🔍 扫描设备]**：自动扫描周围低功耗蓝牙设备，并实时展示信号强度 (RSSI)。
-   - 自动识别并高亮目标戒指（设备名默认 `SpO2-Ring`，MAC: `33:22:33:DB:30:A0`）。
-   - 点击 **[⚡ 连接戒指]**：建立连接后自动枚举 GATT 服务，写入 CCC 描述符订阅通知通道（`FEE7` 服务下的 `FFF5` 特征）。
-   - 支持**自动重连**（勾选“自动重连”后断开将自动尝试重新连接）。
-2. **模拟演示模式**：
-   - 无实体戒指时，可点击 **[▶ 模拟演示]** 体验完整的波形渲染、算法数据变化与数据录制流程。
-3. **高帧率多通道动态波形 (PyQtGraph)**：
-   - **SpO2 趋势曲线**：标定 95% 正常与 90% 警戒基准线。
-   - **时域心率 HR_time 趋势曲线**：纯时域自相关心率 (`HR_time`) 动态追踪与波动观测。
-   - **微循环与光路曲线**：实时追踪灌注指数 (`PI`) 与红光/红外光路吸收比值 (`R`)。
-   - 支持 30点、60点、120点、300点或全屏时间窗切换，支持一键“暂停波形”与“清空曲线”。
-4. **数字指标大卡片仪表盘**：
-   - 超大字体显示 SpO2、HR、PI、R 比值。
-   - 动态有效性状态检测（`VALID` / `INVALID`）与标定状态标识（`未标定(工程联调)` / `已标定`）。
-5. **原始报文流与调试日志**：
-   - 支持查看最近 100 帧详细解析表格（时间戳、序号、有效性、标定、各字段、原始 20 字节 Hex 码）。
-   - 系统运行与蓝牙底层交互日志输出。
-6. **数据录制与 CSV 导出**：
-   - 点击 **[🔴 开始录制数据]**：实时将接收到的每个数据包以毫秒精度时间戳追加写入 CSV 文件。
-   - 点击 **[📁 打开保存文件夹]**：直接打开 `tool/recordings/` 目录查看与导入历史实验数据（可用 Excel、Origin、MATLAB 分析）。
+- 扫描、连接、断开和自动重连。
+- Raw、算法、Raw+算法三种输出模式。
+- 连续、15 s、30 s、自定义周期选择。
+- 设备端开始/停止记录；开始新记录前弹窗确认，因为该操作会擦除旧记录。
+- 从指定记录序号继续历史同步，断开后可续传；历史数据单独保存为 CSV。
+- 实时 SpO2、HR、PI、信号质量、运动状态、电量、RTC 时间和 Raw 红光/红外波形。
+- 本机实时 CSV 录制与无硬件模拟演示。
 
----
+## 20 字节实时数据包
 
-## 协议与报文格式说明
+所有多字节字段均为小端。
 
-固件端通过 Service `0xFEE7` 下的 Characteristic `0xFFF5` 发送 Notify 结果包（每包 20 字节，小端模式）：
+### A5 01 算法结果
 
-| 字节偏移 | 字段名称 | 格式 | 说明 |
-|:---:|:---:|:---:|:---|
-| 0 ~ 1 | 帧头 Header | 0xA5, 0x01 | 固定包头标志 |
-| 2 | Flags 标志位 | uint8 | bit 0: Valid，bit 1: Calibrated，bit 2: Moving（1运动，0静止） |
-| 3 | 保留字 Reserved | uint8 | 0x00 |
-| 4 ~ 7 | 流水号 Seq | uint32 (LE) | 帧序号，用于丢包率统计 |
-| 8 ~ 9 | SpO2 * 100 | uint16 (LE) | 血氧饱和度（例 9850 表示 98.50%） |
-| 10 ~ 11 | HR * 10 | uint16 (LE) | 综合心率（例 720 表示 72.0 BPM） |
-| 12 ~ 13 | PI * 100 | uint16 (LE) | 灌注指数（例 210 表示 2.10%） |
-| 14 ~ 15 | Ratio * 10000 | uint16 (LE) | R 吸收比值（例 5420 表示 0.5420） |
-| 16 ~ 17 | HR_time * 10 | uint16 (LE) | 时域自相关心率（例 718 表示 71.8 BPM） |
-| 18 ~ 19 | HR_fft * 10 | uint16 (LE) | 频域 FFT 心率（例 725 表示 72.5 BPM） |
+| 偏移 | 字段 |
+|---|---|
+| 0..1 | `A5 01` |
+| 2 | flags：bit0 有效、bit1 已标定、bit2 运动 |
+| 3 | 信号质量 0..100 |
+| 4..7 | 采样序号 `uint32` |
+| 8..11 | 设备 RTC Unix 时间 `uint32` |
+| 12..13 | SpO2 ×100 |
+| 14..15 | HR ×10 |
+| 16..17 | PI ×100 |
+| 18..19 | 体温 ×100，V1 固定 0 |
 
-每成功发送 30 个血氧包，固件追加一个 20 字节电量包：
+### A5 02 电量
 
-| 字节偏移 | 字段名称 | 格式 | 说明 |
-|:---:|:---:|:---:|:---|
-| 0 ~ 1 | 帧头/类型 | 0xA5, 0x02 | CW2015 电量包 |
-| 2 | Flags | uint8 | bit 0: 电量数据有效 |
-| 3 | Capacity | uint8 | 剩余电量百分比 |
-| 4 ~ 5 | Voltage | uint16 (LE) | 电池电压，单位 mV |
-| 6 ~ 9 | Seq | uint32 (LE) | 对应的最近血氧包序号 |
-| 10 ~ 19 | Reserved | - | 保留为 0 |
+`flags、capacity、voltage_mV、latest_sequence`，其余字节保留为 0。
 
----
+### A5 04 Raw PPG
 
-## 文件结构说明
+每包合并两组红光/红外样本，携带第一样本序号、75 Hz 采样率和 RTC 时间。为适配默认 20 B ATT 通知，固件将 20 bit ADC 值算术右移 4 bit 写入 `int16`，上位机左移 4 bit 恢复量级；因此低 4 bit 不传输。
 
+## 控制帧
+
+格式为：
+
+```text
+AA 55 | version | command | sequence(u16) | length(u16) | payload(0..10) | CRC16-CCITT(u16)
 ```
-tool/
-├── main.py              # 上位机启动入口，整合 qasync 与 PyQt5
-├── ble_client.py        # BLE 客户端封装（Bleak 异步扫描、连接、特征查找、Notify 订阅、模拟数据）
-├── protocol.py          # 20字节私有协议解析、报文结构体与统计类
-├── data_recorder.py     # 实时数据记录与 CSV 导出管理
-├── test_suite.py        # 自动化单元测试套件
-├── run.bat              # Windows 快捷运行批处理
-├── requirements.txt     # 依赖包列表
-├── recordings/          # 数据录制自动保存目录
-└── ui/
-    ├── __init__.py
-    ├── dashboard.py     # 核心数字指标大卡片仪表盘
-    ├── chart_view.py    # PyQtGraph 动态高帧率曲线图组件
-    └── main_window.py   # 主窗口界面排版与交互逻辑
+
+命令：`01 TIME_SYNC`、`10 SET_OUTPUT_MODE`、`11 SET_SAMPLE_PERIOD`、`20 START_RECORD`、`21 STOP_RECORD`、`22 GET_RECORD_INFO`、`23 SYNC_RECORD`、`24 ERASE_RECORD`、`30 GET_DEVICE_STATUS`、`40 SET_MOTION_PARAMETER`、`80 ACK/EVENT`、`81 ERROR`。
+
+状态、记录信息和一条历史记录超过单帧有效载荷时分片发送；`ProtocolDecoder` 按命令和序号重组，并再次校验历史记录自身 CRC。
+
+## 测试
+
+在 `tool` 目录运行：
+
+```powershell
+D:\software\anaconda3\envs\pyqt\python.exe -m unittest -v test_suite.py
 ```
+
+当前 9 项测试覆盖结果/电量解析、控制帧 CRC、分片状态重组、统计和 CSV。真实 BLE 连接仍需在 Windows 真机环境验收。

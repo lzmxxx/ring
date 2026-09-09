@@ -59,7 +59,7 @@
 #endif
 
 /* 物理按键 (PA0) 防误触长按时间门限 */
-#define POWER_KEY_ON_HOLD_MS        1500U   /**< 待机唤醒后开机确认持续按住时间：1500 毫秒 */
+#define POWER_KEY_ON_HOLD_MS        2000U   /**< 待机唤醒后开机确认持续按住时间：2000 毫秒 */
 #define POWER_KEY_OFF_HOLD_MS       2000U   /**< 系统运行期确认关机持续按住时间：2000 毫秒 */
 
 /* 生理算法标定状态 */

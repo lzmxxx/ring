@@ -45,6 +45,8 @@ void bsp_power_init(void);
 void bsp_sensor_power_on(void);
 void bsp_afe_power_on(void);
 void bsp_afe_power_off(void);
+void bsp_status_led_on(void);
+void bsp_status_led_off(void);
 
 /**
  * @brief  切断所有传感器与 AFE 供电域 (PA11 与 PC13 输出低电平)

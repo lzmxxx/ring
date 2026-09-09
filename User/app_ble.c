@@ -41,15 +41,16 @@ static struct rt_messagequeue result_mq;
 static uint8_t               result_pool[APP_RESULT_QUEUE_DEPTH * (sizeof(SpO2_Result) + sizeof(void *))];
 typedef struct
 {
-    uint8_t kind;
     uint8_t length;
     uint8_t data[APP_PACKET_SIZE];
 } BleTxItem;
-#define BLE_TX_PACKET   0U
-#define BLE_TX_HISTORY  1U
 #define BLE_TX_QUEUE_DEPTH 12U
 static struct rt_messagequeue tx_mq;
 static uint8_t tx_pool[BLE_TX_QUEUE_DEPTH * (sizeof(BleTxItem) + sizeof(void *))];
+static struct rt_messagequeue raw_mq;
+static uint8_t raw_pool[4U * (sizeof(BleTxItem) + sizeof(void *))];
+static struct rt_messagequeue history_mq;
+static uint8_t history_pool[4U * (sizeof(app_record_t) + sizeof(void *))];
 static struct rt_thread      ble_thread;
 ALIGN(RT_ALIGN_SIZE) static uint8_t ble_stack[APP_BLE_TASK_STACK_SIZE];
 
@@ -62,6 +63,7 @@ static rt_bool_t raw_half_full;
 static int32_t raw_red;
 static int32_t raw_ir;
 static uint32_t raw_sequence;
+static uint32_t raw_timestamp;
 
 /**
  * @brief  循环驱动 BLE 协议栈内部状态机直到空闲
@@ -86,13 +88,22 @@ static void run_stack_until_idle(void)
 
 static void put_u32(uint8_t *data, uint32_t value)
 {
-    data[0]=(uint8_t)value;data[1]=(uint8_t)(value>>8);data[2]=(uint8_t)(value>>16);data[3]=(uint8_t)(value>>24);
+    data[0] = (uint8_t)value;
+    data[1] = (uint8_t)(value >> 8);
+    data[2] = (uint8_t)(value >> 16);
+    data[3] = (uint8_t)(value >> 24);
 }
 
 static rt_bool_t queue_tx_item(const BleTxItem *item)
 {
-    if (!BLE_Ready || !item) return RT_FALSE;
-    if (rt_mq_send(&tx_mq, item, sizeof(*item)) != RT_EOK) return RT_FALSE;
+    if (!BLE_Ready || !item)
+    {
+        return RT_FALSE;
+    }
+    if (rt_mq_send(&tx_mq, item, sizeof(*item)) != RT_EOK)
+    {
+        return RT_FALSE;
+    }
     ble_wakeup();
     return RT_TRUE;
 }
@@ -101,95 +112,316 @@ static rt_bool_t queue_protocol(uint8_t command, uint16_t sequence,
                                 const uint8_t *payload, uint8_t payload_length)
 {
     BleTxItem item;
-    memset(&item,0,sizeof(item));item.kind=BLE_TX_PACKET;
-    item.length=AppProtocol_Build(command,sequence,payload,payload_length,item.data);
+
+    memset(&item, 0, sizeof(item));
+    item.length = AppProtocol_Build(command, sequence, payload,
+                                    payload_length, item.data);
     return item.length ? queue_tx_item(&item) : RT_FALSE;
 }
 
 static void queue_ack(uint8_t command, uint16_t sequence, uint8_t value0, uint8_t value1)
 {
-    uint8_t payload[4]={command,0U,value0,value1};
-    (void)queue_protocol(APP_CMD_ACK,sequence,payload,sizeof(payload));
+    uint8_t payload[4] = {command, 0U, value0, value1};
+
+    (void)queue_protocol(APP_CMD_ACK, sequence, payload, sizeof(payload));
 }
 
 void app_ble_post_error(uint8_t command, uint8_t error)
 {
-    uint8_t payload[2]={command,error};
-    (void)queue_protocol(APP_CMD_ERROR,protocol_tx_sequence++,payload,sizeof(payload));
+    uint8_t payload[2] = {command, error};
+
+    (void)queue_protocol(APP_CMD_ERROR, protocol_tx_sequence++, payload,
+                         sizeof(payload));
 }
 
 void app_ble_post_event(app_ble_event_t event, uint32_t value)
 {
-    uint8_t payload[7]={0xFFU,0U,(uint8_t)event,0U,0U,0U,0U};
-    put_u32(&payload[3],value);
-    (void)queue_protocol(APP_CMD_ACK,protocol_tx_sequence++,payload,sizeof(payload));
+    uint8_t payload[7] = {0xFFU, 0U, (uint8_t)event, 0U, 0U, 0U, 0U};
+
+    put_u32(&payload[3], value);
+    (void)queue_protocol(APP_CMD_ACK, protocol_tx_sequence++, payload,
+                         sizeof(payload));
 }
 
 rt_bool_t app_ble_post_history(const app_record_t *record)
 {
-    BleTxItem item;
-    if (!record || !ble_notifications_enabled()) return RT_FALSE;
-    memset(&item,0,sizeof(item));item.kind=BLE_TX_HISTORY;item.length=sizeof(*record);
-    memcpy(item.data,record,sizeof(*record));
-    return queue_tx_item(&item);
+    if (!record || !ble_notifications_enabled())
+    {
+        return RT_FALSE;
+    }
+    if (rt_mq_send(&history_mq, record, sizeof(*record)) != RT_EOK)
+    {
+        return RT_FALSE;
+    }
+    ble_wakeup();
+    return RT_TRUE;
 }
 
 void app_ble_post_raw(int32_t red, int32_t ir, uint32_t sequence)
 {
     BleTxItem item;
-    if (!app_device_raw_required()) { raw_half_full=RT_FALSE; return; }
+    if (!app_device_raw_required())
+    {
+        raw_half_full = RT_FALSE;
+        return;
+    }
     if (!raw_half_full)
     {
-        raw_red=red;raw_ir=ir;raw_sequence=sequence;raw_half_full=RT_TRUE;return;
+        raw_red       = red;
+        raw_ir        = ir;
+        raw_sequence  = sequence;
+        raw_timestamp = app_device_rtc_now();
+        raw_half_full = RT_TRUE;
+        return;
     }
-    memset(&item,0,sizeof(item));item.kind=BLE_TX_PACKET;item.length=APP_PACKET_SIZE;
-    AppPacket_Raw(raw_sequence,raw_red,raw_ir,red,ir,item.data);
-    (void)queue_tx_item(&item);raw_half_full=RT_FALSE;
+    memset(&item, 0, sizeof(item));
+    item.length = APP_PACKET_SIZE;
+    AppPacket_Raw(raw_sequence, raw_timestamp, raw_red, raw_ir, red, ir,
+                  item.data);
+    if (rt_mq_send(&raw_mq, &item, sizeof(item)) == RT_EOK)
+    {
+        ble_wakeup();
+    }
+    raw_half_full = RT_FALSE;
 }
 
 static void queue_device_status(uint16_t sequence)
 {
-    app_device_status_t status;uint8_t payload[10];
-    app_device_get_status(&status);memset(payload,0,sizeof(payload));
-    payload[0]=0U;payload[1]=2U;payload[2]=status.state;payload[3]=status.output_mode;
-    payload[4]=(uint8_t)status.sample_period_sec;payload[5]=(uint8_t)(status.sample_period_sec>>8);
-    payload[6]=(status.rtc_valid?0x01U:0U)|(status.record_enable?0x02U:0U)|(status.sensor_state?0x04U:0U)|(status.connected?0x08U:0U)|(status.subscribed?0x10U:0U);
-    payload[7]=status.error;payload[8]=(uint8_t)status.timezone_min;payload[9]=(uint8_t)(status.timezone_min>>8);
-    (void)queue_protocol(APP_CMD_GET_DEVICE_STATUS,sequence,payload,sizeof(payload));
-    payload[0]=1U;payload[1]=2U;put_u32(&payload[2],0x20260909UL);put_u32(&payload[6],app_device_rtc_now());
-    (void)queue_protocol(APP_CMD_GET_DEVICE_STATUS,sequence,payload,sizeof(payload));
+    app_device_status_t status;
+    uint8_t payload[10];
+
+    app_device_get_status(&status);
+    memset(payload, 0, sizeof(payload));
+    payload[0] = 0U;
+    payload[1] = 2U;
+    payload[2] = status.state;
+    payload[3] = status.output_mode;
+    payload[4] = (uint8_t)status.sample_period_sec;
+    payload[5] = (uint8_t)(status.sample_period_sec >> 8);
+    payload[6] = (status.rtc_valid ? 0x01U : 0U) |
+                 (status.record_enable ? 0x02U : 0U) |
+                 (status.sensor_state ? 0x04U : 0U) |
+                 (status.connected ? 0x08U : 0U) |
+                 (status.subscribed ? 0x10U : 0U) |
+                 (status.motion_state ? 0x20U : 0U);
+    payload[7] = status.error;
+    payload[8] = (uint8_t)status.timezone_min;
+    payload[9] = (uint8_t)(status.timezone_min >> 8);
+    (void)queue_protocol(APP_CMD_GET_DEVICE_STATUS, sequence, payload,
+                         sizeof(payload));
+
+    payload[0] = 1U;
+    payload[1] = 2U;
+    put_u32(&payload[2], 0x20260909UL);
+    put_u32(&payload[6], app_device_rtc_now());
+    (void)queue_protocol(APP_CMD_GET_DEVICE_STATUS, sequence, payload,
+                         sizeof(payload));
 }
 
 static void queue_record_info(uint16_t sequence)
 {
-    app_record_info_t info;uint8_t bytes[24],payload[10];uint8_t part;
-    app_record_get_info(&info);put_u32(&bytes[0],info.session_id);put_u32(&bytes[4],info.record_count);
-    put_u32(&bytes[8],info.first_timestamp);put_u32(&bytes[12],info.last_timestamp);
-    put_u32(&bytes[16],info.flash_used);put_u32(&bytes[20],info.flash_total);
-    for(part=0U;part<3U;part++){payload[0]=part;payload[1]=3U;memcpy(&payload[2],&bytes[part*8U],8U);(void)queue_protocol(APP_CMD_GET_RECORD_INFO,sequence,payload,sizeof(payload));}
+    app_record_info_t info;
+    uint8_t bytes[24];
+    uint8_t payload[10];
+    uint8_t part;
+
+    app_record_get_info(&info);
+    put_u32(&bytes[0], info.session_id);
+    put_u32(&bytes[4], info.record_count);
+    put_u32(&bytes[8], info.first_timestamp);
+    put_u32(&bytes[12], info.last_timestamp);
+    put_u32(&bytes[16], info.flash_used);
+    put_u32(&bytes[20], info.flash_total);
+
+    for (part = 0U; part < 3U; part++)
+    {
+        payload[0] = part;
+        payload[1] = 3U;
+        memcpy(&payload[2], &bytes[part * 8U], 8U);
+        (void)queue_protocol(APP_CMD_GET_RECORD_INFO, sequence, payload,
+                             sizeof(payload));
+    }
 }
 
-static uint16_t get_u16(const uint8_t *data){return (uint16_t)data[0]|((uint16_t)data[1]<<8);}
-static uint32_t get_u32(const uint8_t *data){return (uint32_t)data[0]|((uint32_t)data[1]<<8)|((uint32_t)data[2]<<16)|((uint32_t)data[3]<<24);}
+static uint16_t get_u16(const uint8_t *data)
+{
+    return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
+}
+
+static uint32_t get_u32(const uint8_t *data)
+{
+    return (uint32_t)data[0] |
+           ((uint32_t)data[1] << 8) |
+           ((uint32_t)data[2] << 16) |
+           ((uint32_t)data[3] << 24);
+}
 
 static void handle_command(const uint8_t *data, uint16_t length)
 {
-    app_protocol_frame_t frame;uint8_t error=APP_ERR_PROTOCOL;
-    if(AppProtocol_Decode(data,length,&frame)!=0U){app_device_set_error(APP_ERR_PROTOCOL);app_ble_post_error(0U,APP_ERR_PROTOCOL);return;}
-    if(frame.command==APP_CMD_TIME_SYNC&&frame.payload_length==6U)
-    {error=app_device_rtc_set(get_u32(frame.payload),(int16_t)get_u16(&frame.payload[4]));if(!error)queue_ack(frame.command,frame.sequence,1U,0U);}
-    else if(frame.command==APP_CMD_SET_OUTPUT_MODE&&frame.payload_length==1U)
-    {error=app_device_set_output_mode(frame.payload[0]);if(!error)queue_ack(frame.command,frame.sequence,frame.payload[0],0U);}
-    else if(frame.command==APP_CMD_SET_SAMPLE_PERIOD&&frame.payload_length==2U)
-    {uint16_t period=get_u16(frame.payload);error=app_device_set_sample_period(period);if(!error)queue_ack(frame.command,frame.sequence,(uint8_t)period,(uint8_t)(period>>8));}
-    else if(frame.command==APP_CMD_START_RECORD&&frame.payload_length==0U){error=app_record_start();if(!error)queue_ack(frame.command,frame.sequence,0U,0U);}
-    else if(frame.command==APP_CMD_STOP_RECORD&&frame.payload_length==0U){error=app_record_stop();if(!error)queue_ack(frame.command,frame.sequence,0U,0U);}
-    else if(frame.command==APP_CMD_ERASE_RECORD&&frame.payload_length==0U){error=app_record_erase();if(!error)queue_ack(frame.command,frame.sequence,0U,0U);}
-    else if(frame.command==APP_CMD_GET_RECORD_INFO&&frame.payload_length==0U){queue_record_info(frame.sequence);error=0U;}
-    else if(frame.command==APP_CMD_SYNC_RECORD&&frame.payload_length==2U){error=app_record_sync(get_u16(frame.payload));if(!error)queue_ack(frame.command,frame.sequence,0U,0U);}
-    else if(frame.command==APP_CMD_GET_DEVICE_STATUS&&frame.payload_length==0U){queue_device_status(frame.sequence);error=0U;}
-    else if(frame.command==APP_CMD_SET_MOTION_PARAM&&frame.payload_length==2U){error=SC7A20_SetMotionParameter(frame.payload[0],frame.payload[1]);if(!error)queue_ack(frame.command,frame.sequence,frame.payload[0],frame.payload[1]);}
-    if(error)app_ble_post_error(frame.command,error==1U?APP_ERR_PROTOCOL:error);
+    app_protocol_frame_t frame;
+    uint16_t period;
+    uint8_t error = APP_ERR_NONE;
+
+    if (AppProtocol_Decode(data, length, &frame) != 0U)
+    {
+        app_device_set_error(APP_ERR_PROTOCOL);
+        app_ble_post_error(0U, APP_ERR_PROTOCOL);
+        return;
+    }
+
+    switch (frame.command)
+    {
+    case APP_CMD_TIME_SYNC:
+        if (frame.payload_length != 6U)
+        {
+            error = APP_ERR_PROTOCOL;
+            break;
+        }
+        error = app_device_rtc_set(get_u32(frame.payload),
+                                   (int16_t)get_u16(&frame.payload[4]));
+        if (error == APP_ERR_NONE)
+        {
+            queue_ack(frame.command, frame.sequence, 1U, 0U);
+        }
+        break;
+
+    case APP_CMD_SET_OUTPUT_MODE:
+        if (frame.payload_length != 1U)
+        {
+            error = APP_ERR_PROTOCOL;
+            break;
+        }
+        error = app_device_set_output_mode(frame.payload[0]);
+        if (error != APP_ERR_NONE)
+        {
+            error = APP_ERR_INVALID_MODE;
+        }
+        else
+        {
+            queue_ack(frame.command, frame.sequence, frame.payload[0], 0U);
+        }
+        break;
+
+    case APP_CMD_SET_SAMPLE_PERIOD:
+        if (frame.payload_length != 2U)
+        {
+            error = APP_ERR_PROTOCOL;
+            break;
+        }
+        period = get_u16(frame.payload);
+        error = app_device_set_sample_period(period);
+        if (error != APP_ERR_NONE)
+        {
+            error = APP_ERR_INVALID_PERIOD;
+        }
+        else
+        {
+            queue_ack(frame.command, frame.sequence,
+                      (uint8_t)period, (uint8_t)(period >> 8));
+        }
+        break;
+
+    case APP_CMD_START_RECORD:
+        error = (frame.payload_length == 0U) ? app_record_start()
+                                             : APP_ERR_PROTOCOL;
+        if (error == APP_ERR_NONE)
+        {
+            queue_ack(frame.command, frame.sequence, 0U, 0U);
+        }
+        break;
+
+    case APP_CMD_STOP_RECORD:
+        error = (frame.payload_length == 0U) ? app_record_stop()
+                                             : APP_ERR_PROTOCOL;
+        if (error != APP_ERR_NONE)
+        {
+            error = (error == APP_ERR_PROTOCOL) ? error : APP_ERR_FLASH;
+        }
+        else
+        {
+            queue_ack(frame.command, frame.sequence, 0U, 0U);
+        }
+        break;
+
+    case APP_CMD_ERASE_RECORD:
+        error = (frame.payload_length == 0U) ? app_record_erase()
+                                             : APP_ERR_PROTOCOL;
+        if (error != APP_ERR_NONE)
+        {
+            error = (error == APP_ERR_PROTOCOL) ? error : APP_ERR_FLASH;
+        }
+        else
+        {
+            queue_ack(frame.command, frame.sequence, 0U, 0U);
+        }
+        break;
+
+    case APP_CMD_GET_RECORD_INFO:
+        if (frame.payload_length == 0U)
+        {
+            queue_record_info(frame.sequence);
+        }
+        else
+        {
+            error = APP_ERR_PROTOCOL;
+        }
+        break;
+
+    case APP_CMD_SYNC_RECORD:
+        if (frame.payload_length != 2U)
+        {
+            error = APP_ERR_PROTOCOL;
+            break;
+        }
+        error = app_record_sync(get_u16(frame.payload));
+        if (error != APP_ERR_NONE)
+        {
+            error = APP_ERR_FLASH;
+        }
+        else
+        {
+            queue_ack(frame.command, frame.sequence, 0U, 0U);
+        }
+        break;
+
+    case APP_CMD_GET_DEVICE_STATUS:
+        if (frame.payload_length == 0U)
+        {
+            queue_device_status(frame.sequence);
+        }
+        else
+        {
+            error = APP_ERR_PROTOCOL;
+        }
+        break;
+
+    case APP_CMD_SET_MOTION_PARAM:
+        if (frame.payload_length != 2U)
+        {
+            error = APP_ERR_PROTOCOL;
+            break;
+        }
+        error = SC7A20_SetMotionParameter(frame.payload[0], frame.payload[1]);
+        if (error == APP_ERR_NONE)
+        {
+            queue_ack(frame.command, frame.sequence,
+                      frame.payload[0], frame.payload[1]);
+        }
+        else
+        {
+            error = APP_ERR_PROTOCOL;
+        }
+        break;
+
+    default:
+        error = APP_ERR_PROTOCOL;
+        break;
+    }
+
+    if (error != APP_ERR_NONE)
+    {
+        app_ble_post_error(frame.command, error);
+    }
 }
 
 /**
@@ -341,23 +573,37 @@ static void send_pending_battery(uint32_t Sequence)
 
 static void send_tx_item(const BleTxItem *item)
 {
-    uint8_t packet[APP_PROTOCOL_MAX_FRAME];
-    if (!ble_notifications_enabled() || !item) return;
-    if (item->kind == BLE_TX_PACKET)
+    if (!ble_notifications_enabled() || !item)
     {
-        (void)notify_packet(item->data,item->length);
         return;
     }
-    if (item->kind == BLE_TX_HISTORY && item->length == sizeof(app_record_t))
+    (void)notify_packet(item->data, item->length);
+}
+
+static void send_history_record(const app_record_t *record)
+{
+    uint8_t packet[APP_PROTOCOL_MAX_FRAME];
+    uint8_t payload[10];
+    uint8_t part;
+
+    if (!record || !ble_notifications_enabled())
     {
-        const app_record_t *record=(const app_record_t *)item->data;uint8_t payload[10];uint8_t part;
-        for(part=0U;part<2U;part++)
+        return;
+    }
+    for (part = 0U; part < 2U; part++)
+    {
+        uint8_t length;
+
+        payload[0] = part;
+        payload[1] = 2U;
+        memcpy(&payload[2], &((const uint8_t *)record)[part * 8U], 8U);
+        length = AppProtocol_Build(APP_CMD_SYNC_RECORD, record->sequence,
+                                   payload, sizeof(payload), packet);
+        if (!notify_packet(packet, length))
         {
-            payload[0]=part;payload[1]=2U;memcpy(&payload[2],&item->data[part*8U],8U);
-            uint8_t length=AppProtocol_Build(APP_CMD_SYNC_RECORD,record->sequence,payload,sizeof(payload),packet);
-            if(!notify_packet(packet,length))break;
-            run_stack_until_idle();
+            break;
         }
+        run_stack_until_idle();
     }
 }
 
@@ -393,6 +639,7 @@ static void ble_thread_entry(void *parameter)
     bt_attr_param init_params;
     SpO2_Result   current_result;
     BleTxItem     tx_item;
+    app_record_t  history_record;
     uint8_t       result_packet_count = 0U;
     uint32_t      latest_sequence_id  = 0U;
 
@@ -430,11 +677,26 @@ static void ble_thread_entry(void *parameter)
         }
         send_pending_battery(latest_sequence_id);
 
+        /* 传输优先级：控制 > 实时Raw > 算法结果 > 历史记录。 */
+        while (ble_notifications_enabled() &&
+               rt_mq_recv(&raw_mq,&tx_item,sizeof(tx_item),0)==RT_EOK)
+        {
+            send_tx_item(&tx_item);
+            run_stack_until_idle();
+        }
+
         while (ble_notifications_enabled() &&
                (rt_mq_recv(&result_mq, &current_result, sizeof(current_result), 0) == RT_EOK))
         {
             latest_sequence_id = current_result.seq;
             send_result_group(&current_result, &result_packet_count);
+            run_stack_until_idle();
+        }
+
+        if (ble_notifications_enabled() &&
+            rt_mq_recv(&history_mq,&history_record,sizeof(history_record),0)==RT_EOK)
+        {
+            send_history_record(&history_record);
             run_stack_until_idle();
         }
 
@@ -457,7 +719,11 @@ int app_ble_init(void)
         (rt_mq_init(&result_mq, "bleres", result_pool, sizeof(SpO2_Result),
                     sizeof(result_pool), RT_IPC_FLAG_FIFO) != RT_EOK) ||
         (rt_mq_init(&tx_mq, "bletx", tx_pool, sizeof(BleTxItem),
-                    sizeof(tx_pool), RT_IPC_FLAG_FIFO) != RT_EOK))
+                    sizeof(tx_pool), RT_IPC_FLAG_FIFO) != RT_EOK) ||
+        (rt_mq_init(&raw_mq, "bleraw", raw_pool, sizeof(BleTxItem),
+                    sizeof(raw_pool), RT_IPC_FLAG_FIFO) != RT_EOK) ||
+        (rt_mq_init(&history_mq, "blehist", history_pool, sizeof(app_record_t),
+                    sizeof(history_pool), RT_IPC_FLAG_FIFO) != RT_EOK))
     {
         return -1;
     }

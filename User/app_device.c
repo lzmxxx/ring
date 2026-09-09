@@ -28,6 +28,7 @@ static uint32_t window_start_time;
 static rt_bool_t sampling_enabled;
 static rt_bool_t schedule_reset;
 static rt_bool_t state_ready;
+static rt_bool_t flash_busy;
 
 static rt_bool_t is_leap_year(uint16_t year)
 {
@@ -47,8 +48,14 @@ static uint32_t datetime_to_unix(uint16_t year, uint8_t month, uint8_t day,
     uint16_t y;
     uint8_t m;
 
-    for (y = 1970U; y < year; y++) days += is_leap_year(y) ? 366U : 365U;
-    for (m = 1U; m < month; m++) days += days_in_month(year, m);
+    for (y = 1970U; y < year; y++)
+    {
+        days += is_leap_year(y) ? 366U : 365U;
+    }
+    for (m = 1U; m < month; m++)
+    {
+        days += days_in_month(year, m);
+    }
     days += (uint32_t)day - 1U;
     return days * 86400U + (uint32_t)hour * 3600U + (uint32_t)minute * 60U + second;
 }
@@ -136,7 +143,7 @@ static void set_sampling(rt_bool_t enabled)
 
 static void update_sampling_state(void)
 {
-    rt_bool_t requested = (device_status.record_enable ||
+    rt_bool_t requested = !flash_busy && (device_status.record_enable ||
                            (device_status.connected && device_status.subscribed));
     uint32_t now;
 
@@ -263,10 +270,54 @@ uint8_t app_device_set_sample_period(uint16_t period_sec)
     return 0U;
 }
 
-void app_device_set_error(app_error_t error) { device_status.error = (uint8_t)error; }
-void app_device_set_sensor_state(rt_bool_t enabled) { device_status.sensor_state = enabled ? 1U : 0U; }
-void app_device_set_sync_state(rt_bool_t enabled) { device_status.state = enabled ? APP_STATE_FLASH_SYNC : APP_STATE_CONNECTED; }
-void app_device_rtc_wakeup(void) { if (state_ready) rt_sem_release(&state_sem); }
+void app_device_set_error(app_error_t error)
+{
+    device_status.error = (uint8_t)error;
+}
+
+void app_device_set_sensor_state(rt_bool_t enabled)
+{
+    device_status.sensor_state = enabled ? 1U : 0U;
+}
+
+void app_device_set_motion_state(rt_bool_t moving)
+{
+    device_status.motion_state = moving ? 1U : 0U;
+}
+
+void app_device_set_sync_state(rt_bool_t enabled)
+{
+    if (enabled)
+    {
+        device_status.state = APP_STATE_FLASH_SYNC;
+    }
+    else if (sampling_enabled)
+    {
+        device_status.state = APP_STATE_ACQUIRING;
+    }
+    else
+    {
+        device_status.state = device_status.connected ? APP_STATE_CONNECTED
+                                                       : APP_STATE_ADVERTISING;
+    }
+}
+
+void app_device_set_flash_busy(rt_bool_t busy)
+{
+    flash_busy = busy;
+    schedule_reset = RT_TRUE;
+    if (state_ready)
+    {
+        rt_sem_release(&state_sem);
+    }
+}
+void app_device_rtc_wakeup(void)
+{
+    if (state_ready)
+    {
+        rt_sem_release(&state_sem);
+    }
+}
 
 rt_bool_t app_device_algorithm_required(void)
 {

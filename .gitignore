@@ -1,0 +1,21 @@
+# Keil build output and per-user state
+MDK-ARM/Objects/
+MDK-ARM/Listings/
+MDK-ARM/bin/
+MDK-ARM/*.log
+MDK-ARM/*_alog.txt
+MDK-ARM/*_analysis.xlsx
+MDK-ARM/*_sort_by_flash.csv
+MDK-ARM/*_sort_by_ram.csv
+MDK-ARM/*.uvguix.*
+
+# Python caches and local recordings
+__pycache__/
+*.py[cod]
+tool/recordings/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

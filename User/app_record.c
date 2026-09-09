@@ -72,14 +72,20 @@ static uint8_t record_valid(const app_record_t *record)
 
 static uint8_t flash_program(uint32_t address, const void *data, uint16_t length)
 {
-    const uint32_t *words = (const uint32_t *)data;
+    const uint8_t *bytes = (const uint8_t *)data;
     uint16_t word_count = (uint16_t)((length + 3U) / 4U);
     uint16_t i;
     FLASH_STS status = FLASH_COMPL;
 
     FLASH_Unlock();
     for (i = 0U; i < word_count && status == FLASH_COMPL; i++)
-        status = FLASH_ProgramWord(address + (uint32_t)i * 4U, words[i]);
+    {
+        uint16_t offset = (uint16_t)(i * 4U);
+        uint32_t word = 0xFFFFFFFFUL;
+        uint8_t count = (uint8_t)(((uint16_t)(length - offset) >= 4U) ? 4U : (length - offset));
+        memcpy(&word, &bytes[offset], count);
+        status = FLASH_ProgramWord(address + (uint32_t)offset, word);
+    }
     FLASH_Lock();
     return (status == FLASH_COMPL) ? 0U : 1U;
 }
@@ -90,8 +96,9 @@ static uint8_t erase_record_area(void)
     FLASH_STS status = FLASH_COMPL;
 
     record_info.erasing = 1U;
+    app_device_set_flash_busy(RT_TRUE);
     app_ble_post_event(APP_BLE_EVENT_RECORD_ERASING, 0U);
-    rt_thread_mdelay(30U); /* 先给 BLE 任务一次发送状态的机会。 */
+    rt_thread_mdelay(50U); /* 等待采集任务停机，并给 BLE 发送状态的机会。 */
     FLASH_Unlock();
     for (address = APP_RECORD_FLASH_BASE;
          address < APP_RECORD_FLASH_BASE + APP_RECORD_FLASH_TOTAL;
@@ -103,6 +110,7 @@ static uint8_t erase_record_area(void)
     }
     FLASH_Lock();
     record_info.erasing = 0U;
+    app_device_set_flash_busy(RT_FALSE);
     if (status != FLASH_COMPL)
     {
         app_device_set_error(APP_ERR_FLASH);
@@ -144,9 +152,11 @@ static void recover_records(void)
     memset(&record_info, 0, sizeof(record_info));
     record_info.flash_total = RECORD_DATA_BYTES;
     if (meta_a->magic == RECORD_MAGIC &&
-        (uint16_t)meta_a->version_size == RECORD_FORMAT_VERSION) metadata = meta_a;
+        (uint16_t)meta_a->version_size == RECORD_FORMAT_VERSION &&
+        (uint16_t)meta_a->immutable_crc == crc16_ccitt((const uint8_t *)meta_a,16U)) metadata = meta_a;
     else if (meta_b->magic == RECORD_MAGIC &&
-             (uint16_t)meta_b->version_size == RECORD_FORMAT_VERSION) metadata = meta_b;
+             (uint16_t)meta_b->version_size == RECORD_FORMAT_VERSION &&
+             (uint16_t)meta_b->immutable_crc == crc16_ccitt((const uint8_t *)meta_b,16U)) metadata = meta_b;
     if (!metadata) return;
 
     record_info.session_id = metadata->session_id;
@@ -289,7 +299,8 @@ static uint8_t send_control(record_msg_type_t type, uint16_t start_sequence)
     memset(&message, 0, sizeof(message));
     message.type = (uint8_t)type;
     message.start_sequence = start_sequence;
-    return (rt_mq_send(&record_mq, &message, sizeof(message)) == RT_EOK) ? 0U : 1U;
+    return (rt_mq_send(&record_mq, &message, sizeof(message)) == RT_EOK)
+               ? APP_ERR_NONE : APP_ERR_FLASH;
 }
 
 int app_record_init(void)
@@ -314,7 +325,17 @@ void app_record_post_result(const SpO2_Result *result)
     if (rt_mq_send(&record_mq, &message, sizeof(message)) != RT_EOK) app_device_set_error(APP_ERR_FLASH);
 }
 
-uint8_t app_record_start(void) { return send_control(REC_MSG_START, 0U); }
+uint8_t app_record_start(void)
+{
+    app_device_status_t status;
+
+    app_device_get_status(&status);
+    if (!status.rtc_valid)
+    {
+        return APP_ERR_RTC_INVALID;
+    }
+    return send_control(REC_MSG_START, 0U);
+}
 uint8_t app_record_stop(void) { return send_control(REC_MSG_STOP, 0U); }
 uint8_t app_record_erase(void) { return send_control(REC_MSG_ERASE, 0U); }
 uint8_t app_record_sync(uint16_t start_sequence) { return send_control(REC_MSG_SYNC, start_sequence); }

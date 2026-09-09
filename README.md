@@ -1,48 +1,38 @@
-# N32WB452 + IPA1322 RT-Thread 血氧戒指
+# 低功耗血氧戒指 V1.0
 
-## 构建
+本工程包含 N32WB452 + RT-Thread 戒指固件、IPA1322/SC7A20/CW2015 驱动、血氧算法和 PyQt5/Bleak 上位机。当前版本已按《低功耗血氧戒指嵌入式与上位机功能需求规格 V1.0》完成软件侧重构。
 
-用 Keil MDK5 打开 `MDK-ARM/rt_thread_ipa1322.uvprojx`。工程使用 ARM Compiler 5、Cortex-M4F 和 CMSIS-DSP `arm_cortexM4lf_math.lib`。
+## 快速入口
 
-## 任务与数据链
+- 固件工程：`MDK-ARM/rt_thread_ipa1322.uvprojx`
+- 固件阅读指南：`User/README_代码结构.md`
+- 上位机入口：`tool/main.py` 或 `tool/run.bat`
+- 上位机说明：`tool/README.md`
+- 本次交付说明：`需求实现与代码修改说明_V1.0.md`
 
-- `ble` 优先级4：协议栈、订阅状态和结果 Notify。
-- `ppg` 优先级6：PB3 FIFO 水线中断唤醒，I2C1 RX DMA1_CH7 批量读取，配对 LED0/660nm 和 LED1/905nm。
-- `spo2` 优先级10：768 Frame Ring，600 Frame/8s 窗，每75个有效 Frame 更新一次。
-- Idle：所有电源锁释放且 BLE 允许时进入 STOP0。
+## 已实现能力
 
-按键 PA0 使用板上 R6 10k 外部下拉，GPIO 配置为浮空输入。Standby 唤醒后持续按住1.5s才确认开机，成功后等待释放；运行期每20ms采样，连续按住2s才进入关机流程。
+- PA0 长按 2 秒开/关机，关机前提交记录元数据，进入 Standby。
+- BLE 连接且完成 Notify 订阅后才启动实时采集；连接后上位机自动同步 RTC。
+- Raw、算法、Raw+算法三种输出模式；连续、15 s、30 s及自定义 `>=15 s` 周期。
+- 周期模式采用 RTC 绝对时间点调度，每个周期采集 10 s，不从算法结束时重新计时。
+- SC7A20 低功耗运动检测；结果附带运动、质量、RTC 时间和体温预留字段。
+- 200 KiB 片内 Flash 记录区、16 B 定长记录、双元数据页、CRC、断电扫描恢复和断点续传。
+- BLE 控制帧 CRC16；发送优先级为控制、实时 Raw、实时结果、历史同步。
+- 上位机具备模式/周期控制、设备记录、历史同步与 CSV 导出、原始波形显示。
 
-FIFO 溢出、DMA 超时或数据 Tag 无法配对时，当前算法窗立即作废，不会将断流前后的数据拼成一个血氧窗。
+## 构建结果
 
-## IPA1322 集中调参
+ARM Compiler 5 最终链接结果：
 
-只需修改 `mydrivers/IPA1322/IPA1322.c` 中 `IPA1322_Init()` 的“用户调参区”。当前值：
+```text
+Code=102776  RO-data=133520  RW-data=1868  ZI-data=77884
+RAM 77.88 KiB / 144 KiB = 54.09%，剩余 67,704 B
+应用 Flash 230.76 KiB / 312 KiB = 73.96%，剩余 83,192 B
+```
 
-- LED0/LED1：60mA；LED IDAC=0。
-- OSR=512，ADC 积分128us，LED 点亮150us。
-- TIA=250kOhm，IIR=b01，不抽取。
-- 二阶环境光消除；FIFO 仅存每路 `SIGNAL_DATA`。
-- 帧率75.03Hz；FIFO 剩余空间水线8，约56 entry 触发。
-- `EarlySamplePD=1` 会额外写 `0x23[7]=1` 选择外置 Photodiode，适用于原厂说明的首批10颗；后续样品/量产改为0。
+Flash 地址 `0x0804E000~0x0807FFFF` 已保留给记录模块，禁止把 Keil IROM1 大小扩大到 `0x4E000` 以上。
 
-## 血氧算法
+## 当前边界
 
-`mydrivers/SpO2/SpO2.c` 同时使用 CMSIS-DSP 点积/均值/正余弦函数：
-
-- 时域：约束30~200 BPM的归一化自相关。
-- 频域：0.5~3.375Hz 谱峰与主峰占比。
-- 时域/频域心率差、红光/红外相关性和 PI 共同作为质量门限。
-- SpO2 使用旧 SPCOV2.0 ProSim8 R 表插值；`SPO2_CALIBRATION_CONFIRMED=0` 明确标记该表尚未针对当前戒指光路重新标定。
-
-## BLE 结果包
-
-服务 UUID `0xFEE7`，特征 `0xFFF5`；只在中央设备连接且写 CCC 开启 Notify 后发送。每包20字节，小端：
-
-`A5 01 | flags(1) | reserved(1) | seq(u32) | SpO2*100 | HR*10 | PI*100 | R*10000 | HR_time*10 | HR_freq*10`
-
-`flags.bit0=valid`，`flags.bit1=calibrated`，`flags.bit2=moving`（SC7A20内部判断，1运动、0静止）。当前标定位为0，因此读数只用于算法联调，不应作为医疗测量结果。
-
-每成功发送30个血氧包后追加一个20字节CW2015电量包：
-
-`A5 02 | valid(1) | capacity%(1) | voltage_mV(u16) | latest_spo2_seq(u32) | reserved(10)`
+血氧标定状态仍为 `SPO2_CALIBRATION_CONFIRMED=0`；体温字段为格式预留，V1 固定为 0。软件编译、协议测试和算法对照已通过，但整机平均电流、RTC 漂移、Flash 断电恢复以及 8/16 小时稳定性仍需真机验收。
