@@ -1,0 +1,42 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'D:\software\keilv5\keilapp\ARM\AC5\Bin'
+Build target 'N32WB452_BLE_RTOS'
+Note: source file '..\RTOS\src\clock.c' - object file renamed from '.\Objects\clock.o' to '.\Objects\clock_1.o'.compiling SEGGER_SYSVIEW.c...
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #79: expected a type specifier
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #90: function returning function is not allowed
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #168: a function type is not allowed here
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW_ConfDefaults.h(76): error:  #5: cannot open source input file "SEGGER_RTT_Conf.h": No such file or directory
+  #include "SEGGER_RTT_Conf.h"
+G:\5-�о�������ҽ����\8-�ɴ���\Ѫ����ָ��\Ƕ��ʽ����\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.c: 0 warnings, 4 errors
+compiling SEGGER_SYSVIEW_RTThread.c...
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #79: expected a type specifier
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #90: function returning function is not allowed
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #168: a function type is not allowed here
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW_RTThread.c(21): error:  #5: cannot open source input file "SEGGER_RTT.h": No such file or directory
+  #include "SEGGER_RTT.h"
+G:\5-�о�������ҽ����\8-�ɴ���\Ѫ����ָ��\Ƕ��ʽ����\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW_RTThread.c: 0 warnings, 4 errors
+compiling SEGGER_SYSVIEW_Config_RTThread.c...
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #79: expected a type specifier
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #90: function returning function is not allowed
+    U64  (*pfGetTime)      (void);
+G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #168: a function type is not allowed here
+    U64  (*pfGetTime)      (void);
+G:\5-�о�������ҽ����\8-�ɴ���\Ѫ����ָ��\Ƕ��ʽ����\rt_thread_ipa1322\segger_systemview\SEGGER_SYSVIEW_Config_RTThread.c: 0 warnings, 3 errors
+compiling rtt_heartbeat_template.c...
+compiling app_main.c...
+..\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #79: expected a type specifier
+    U64  (*pfGetTime)      (void);
+..\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #90: function returning function is not allowed
+    U64  (*pfGetTime)      (void);
+..\segger_systemview\SEGGER_SYSVIEW.h(217): error:  #168: a function type is not allowed here
+    U64  (*pfGetTime)      (void);
+..\User\app_main.c: 0 warnings, 3 errors
+".\Objects\N32WB452_BLE_RTOS.axf" - 14 Error(s), 0 Warning(s).
+Target not created.
+Build Time Elapsed:  00:00:03

@@ -1,0 +1,4 @@
+Load "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322_cw2015\\MDK-ARM\\Objects\\N32WB452_BLE_RTOS.axf" 
+Erase Done.Programming Failed!RDDI-DAP Error
+Error: Flash Download failed  -  "Cortex-M4"
+Flash Load finished at 20:12:54

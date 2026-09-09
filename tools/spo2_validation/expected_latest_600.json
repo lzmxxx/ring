@@ -1,0 +1,13 @@
+{
+  "sample_rate_hz": 75.0,
+  "sample_count": 600,
+  "time_hr_bpm": 79.22535211267606,
+  "time_r": 0.6919880790956573,
+  "time_spo2_percent": 94.23076653264003,
+  "time_pair_count": 5,
+  "fft_hr_bpm": 29.972076416015625,
+  "fft_r": 0.8147131842703191,
+  "fft_spo2_percent": 89.69415812914161,
+  "dst_r": 0.754293,
+  "dst_spo2_percent": 92.0
+}

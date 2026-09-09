@@ -1,0 +1,9 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'D:\software\keilv5\keilapp\ARM\AC5\Bin'
+Build target 'N32WB452_BLE_RTOS'
+Note: source file '..\RTOS\src\clock.c' - object file renamed from '.\Objects\clock.o' to '.\Objects\clock_1.o'.compiling SpO2.c...
+linking...
+Program Size: Code=82632 RO-data=133412 RW-data=992 ZI-data=102832  
+FromELF: creating hex file...
+After Build - User command #1: fromelf --bin --output=.\bin\N32WB452_BLE_RTOS.bin .\Objects\N32WB452_BLE_RTOS.axf
+".\Objects\N32WB452_BLE_RTOS.axf" - 0 Error(s), 0 Warning(s).
+Build Time Elapsed:  00:00:03

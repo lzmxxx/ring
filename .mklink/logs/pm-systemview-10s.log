@@ -1,0 +1,23 @@
+[*] 连接 MKLink（端口: COM7）...
+[TX] cmd.get_idcode()
+[SERIAL] cmd.get_idcode()
+[SERIAL] idcode = 0X0
+[SERIAL] 0
+[RX] <<<
+[TX] cmd.get_idcode()
+[SERIAL] cmd.get_idcode()
+[SERIAL] idcode = 0X0
+[SERIAL] 0
+[RX] <<<
+[TX] cmd.get_idcode()
+[SERIAL] cmd.get_idcode()
+[SERIAL] idcode = 0X0
+[SERIAL] 0
+[RX] <<<
+[TX] cmd.get_idcode()
+[SERIAL] cmd.get_idcode()
+[SERIAL] idcode = 0X0
+[SERIAL] 0
+[RX] <<<
+[OK] 连接成功
+[FAIL] SystemView 启动失败: RTT control block was not found in target RAM

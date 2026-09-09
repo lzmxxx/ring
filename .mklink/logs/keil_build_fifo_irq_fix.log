@@ -1,0 +1,29 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'D:\software\keilv5\keilapp\ARM\AC5\Bin'
+Build target 'N32WB452_BLE_RTOS'
+Note: source file '..\RTOS\src\clock.c' - object file renamed from '.\Objects\clock.o' to '.\Objects\clock_1.o'.compiling SEGGER_SYSVIEW_Config_RTThread.c...
+compiling SEGGER_SYSVIEW_RTThread.c...
+compiling vt2102_hal.c...
+..\mydrivers\IPA1322\vt2102_hal.c(450): warning:  #188-D: enumerated type mixed with another type
+      p_items->iir_filt_band_width = VT2102_Int_ReadFieldInVariable(u8_reg_val, FIELD_TS_IIR_RATIO);
+..\mydrivers\IPA1322\vt2102_hal.c(451): warning:  #188-D: enumerated type mixed with another type
+      p_items->iir_filt_dec_ratio  = VT2102_Int_ReadFieldInVariable(u8_reg_val, FIELD_TS_DCM_RATIO);
+..\mydrivers\IPA1322\vt2102_hal.c(614): warning:  #188-D: enumerated type mixed with another type
+      p_items->alarm_src          = (VT2102_Int_ReadFieldInVariable(pu8_regs_val[0], FIELD_TS_ALARM_DATA_FIL) << 2);
+..\mydrivers\IPA1322\vt2102_hal.c(616): warning:  #188-D: enumerated type mixed with another type
+      p_items->comp_mode          = VT2102_Int_ReadFieldInVariable(pu8_regs_val[1], FIELD_TS_ALARM_ABS_MODE);
+..\mydrivers\IPA1322\vt2102_hal.c(655): warning:  #188-D: enumerated type mixed with another type
+      p_items->gpio_func                       = VT2102_Int_ReadFieldInVariable(u8_regs_val[0], FIELD_GPIO1_FUNC_SEL);
+..\mydrivers\IPA1322\vt2102_hal.c(658): warning:  #188-D: enumerated type mixed with another type
+      p_items->slot_timing_output_idx_filter   = (u8_regs_val[2] & (FIELD_GPIO1_TS_ALL_MASK | FIELD_GPIO1_TS_SEL_MASK));
+..\mydrivers\IPA1322\vt2102_hal.c(659): warning:  #188-D: enumerated type mixed with another type
+      p_items->slot_timing_output_event_filter = u8_regs_val[3];
+..\mydrivers\IPA1322\vt2102_hal.c(660): warning:  #188-D: enumerated type mixed with another type
+      p_items->sys_debug_output                = VT2102_Int_ReadFieldInVariable(u8_regs_val[4], FIELD_GPIO1_SYSDBG_SEL);
+..\mydrivers\IPA1322\vt2102_hal.c: 8 warnings, 0 errors
+compiling SEGGER_SYSVIEW.c...
+linking...
+Program Size: Code=87776 RO-data=133448 RW-data=1048 ZI-data=120096  
+FromELF: creating hex file...
+After Build - User command #1: fromelf --bin --output=.\bin\N32WB452_BLE_RTOS.bin .\Objects\N32WB452_BLE_RTOS.axf
+".\Objects\N32WB452_BLE_RTOS.axf" - 0 Error(s), 8 Warning(s).
+Build Time Elapsed:  00:00:03

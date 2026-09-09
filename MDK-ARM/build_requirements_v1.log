@@ -1,0 +1,16 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'D:\software\keilv5\keilapp\ARM\AC5\Bin'
+Build target 'N32WB452_BLE_RTOS'
+Note: source file '..\RTOS\src\clock.c' - object file renamed from '.\Objects\clock.o' to '.\Objects\clock_1.o'.compiling app_spo2.c...
+linking...
+Program Size: Code=102296 RO-data=133520 RW-data=1860 ZI-data=77596  
+FromELF: creating hex file...
+After Build - User command #1: fromelf --bin --output=.\bin\N32WB452_BLE_RTOS.bin .\Objects\N32WB452_BLE_RTOS.axf
+After Build - User command #2: G:\5-研究生（生医工）\8-可穿戴\血氧戒指定\嵌入式代码\rt_thread_ipa1322_cw2015\MDK-ARM\keil5_disp_size_bar.exe
+ram:
+  RW_IRAM1 :0x20000000
+  144.00 KB :|■■■■■■■■■■__________|   53.88 % (   77.59 KB /   144.00 KB) [68000 B]
+flash:
+  ER_IROM1 :0x8000000
+  312.00 KB :|■■■■■■■■■■■■■■______|   73.81 % (  230.29 KB /   312.00 KB) [83672 B]
+".\Objects\N32WB452_BLE_RTOS.axf" - 0 Error(s), 0 Warning(s).
+Build Time Elapsed:  00:00:03

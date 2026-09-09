@@ -1,0 +1,26 @@
+#include <rtthread.h>
+#include "bsp_power.h"
+#include "app_ppg.h"
+#include "app_ble.h"
+#include "app_power.h"
+#include "app_spo2.h"
+int main(void)
+{
+    /* Standby唤醒先独立确认长按，误触时不启动任何业务模块。 */
+    if (!app_power_boot_check())
+    {
+        app_power_enter_standby();
+        return 0;
+    }
+
+    /* 基础时钟/RTOS由board初始化；此处只进行模块编排。 */
+    bsp_power_init();
+    app_power_init();
+    if (app_ble_init() || app_ppg_init() || app_spo2_init()) {
+        app_power_off();
+        return -1;
+    }
+    /* 后续由FIFO、DMA、BLE、按键事件驱动，不轮询PPG。 */
+    app_power_unlock(PM_SYSTEM);
+    return 0;
+}

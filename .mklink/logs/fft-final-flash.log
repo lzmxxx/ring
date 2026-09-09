@@ -1,0 +1,4 @@
+Load "C:\\ipa1322_build\\MDK-ARM\\Objects\\N32WB452_BLE_RTOS.axf" 
+Erase Done.Programming Failed!RDDI-DAP Error
+Error: Flash Download failed  -  "Cortex-M4"
+Flash Load finished at 10:22:54

@@ -1,0 +1,16 @@
+.\objects\eif_flash.o: ..\BLE_Driver\platform\src\Eif_flash.c
+.\objects\eif_flash.o: D:\software\keilv5\keilapp\ARM\AC5\Bin\..\include\stdint.h
+.\objects\eif_flash.o: D:\software\keilv5\keilapp\ARM\AC5\Bin\..\include\string.h
+.\objects\eif_flash.o: ..\BLE_Driver\platform\inc\Eif_flash.h
+.\objects\eif_flash.o: ..\BLE_Driver\platform\inc\interface.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\ble_arch.h
+.\objects\eif_flash.o: D:\software\keilv5\keilapp\ARM\AC5\Bin\..\include\stdio.h
+.\objects\eif_flash.o: D:\software\keilv5\keilapp\ARM\AC5\Bin\..\include\stdbool.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwip_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwble_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwip_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwble_hl_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwble_hl_error.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwprf_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\inc\rwapp_config.h
+.\objects\eif_flash.o: ..\BLE_Driver\platform\inc\Eif_debug.h

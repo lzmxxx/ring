@@ -1,0 +1,482 @@
+{
+  "uvprojx_path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\MDK-ARM\\rt_thread_ipa1322.uvprojx",
+  "target_name": "N32WB452_BLE_RTOS",
+  "device": "N32WB452LEQ6",
+  "vendor": "Nationstech",
+  "pack_id": "Nationstech.N32WB452_DFP.1.2.0",
+  "compiler": "ac5",
+  "flm_name": "N32WB452",
+  "flm_path": "$$Device:N32WB452LEQ6$Flash\\N32WB452.FLM",
+  "flash_base": "0x08000000",
+  "flash_size": 524288,
+  "flash_ram_base": "0x20000000",
+  "page_size": 4096,
+  "flash_region_count": 1,
+  "ram_base": "0x20000000",
+  "ram_size": 147456,
+  "output_dir": ".\\Objects\\",
+  "output_name": "N32WB452_BLE_RTOS",
+  "listing_dir": ".\\Listings\\",
+  "hex_path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\MDK-ARM\\Objects\\N32WB452_BLE_RTOS.hex",
+  "map_path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\MDK-ARM\\Listings\\N32WB452_BLE_RTOS.map",
+  "axf_path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\MDK-ARM\\Objects\\N32WB452_BLE_RTOS.axf",
+  "include_paths": [
+    "..\\Start",
+    "..\\Library\\inc",
+    "..\\RTOS\\include",
+    "..\\RTOS",
+    "..\\User",
+    "..\\mydrivers\\Board",
+    "..\\mydrivers\\Power",
+    "..\\mydrivers\\MyI2C",
+    "..\\mydrivers\\IPA1322",
+    "..\\mydrivers\\SpO2",
+    "..\\BLE_Driver\\inc",
+    "..\\BLE_Driver\\api\\inc",
+    "..\\BLE_Driver\\profile\\inc",
+    "..\\BLE_Driver\\platform\\inc",
+    "..\\BLE_Driver",
+    "..\\BLE_Driver\\bsp",
+    "..\\segger_systemview",
+    "..\\segger_rtt"
+  ],
+  "defines": [
+    "N32WB452",
+    "USE_STDPERIPH_DRIVER",
+    "N32WB452_BT_API",
+    "N32WB452XL_EVB",
+    "HSE_VALUE=32000000",
+    "ARM_MATH_CM4",
+    "__FPU_PRESENT=1",
+    "__DSP_PRESENT=1",
+    "USE_RTT",
+    "USE_SYSTEMVIEW"
+  ],
+  "groups": [
+    {
+      "name": "STARTUP",
+      "files": [
+        {
+          "name": "startup_n32wb452.s",
+          "path": "..\\Start\\startup_n32wb452.s",
+          "type": 2
+        }
+      ]
+    },
+    {
+      "name": "CMSIS",
+      "files": [
+        {
+          "name": "system_n32wb452.c",
+          "path": "..\\Start\\system_n32wb452.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "FWLB",
+      "files": [
+        {
+          "name": "misc.c",
+          "path": "..\\Library\\src\\misc.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_bkp.c",
+          "path": "..\\Library\\src\\n32wb452_bkp.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_dbg.c",
+          "path": "..\\Library\\src\\n32wb452_dbg.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_exti.c",
+          "path": "..\\Library\\src\\n32wb452_exti.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_flash.c",
+          "path": "..\\Library\\src\\n32wb452_flash.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_gpio.c",
+          "path": "..\\Library\\src\\n32wb452_gpio.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_pwr.c",
+          "path": "..\\Library\\src\\n32wb452_pwr.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_rcc.c",
+          "path": "..\\Library\\src\\n32wb452_rcc.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_rtc.c",
+          "path": "..\\Library\\src\\n32wb452_rtc.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_tim.c",
+          "path": "..\\Library\\src\\n32wb452_tim.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_usart.c",
+          "path": "..\\Library\\src\\n32wb452_usart.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_i2c.c",
+          "path": "..\\Library\\src\\n32wb452_i2c.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_dma.c",
+          "path": "..\\Library\\src\\n32wb452_dma.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "APPLICATION",
+      "files": [
+        {
+          "name": "app_main.c",
+          "path": "..\\User\\app_main.c",
+          "type": 1
+        },
+        {
+          "name": "app_ppg.c",
+          "path": "..\\User\\app_ppg.c",
+          "type": 1
+        },
+        {
+          "name": "app_ble.c",
+          "path": "..\\User\\app_ble.c",
+          "type": 1
+        },
+        {
+          "name": "app_spo2.c",
+          "path": "..\\User\\app_spo2.c",
+          "type": 1
+        },
+        {
+          "name": "app_power.c",
+          "path": "..\\User\\app_power.c",
+          "type": 1
+        },
+        {
+          "name": "interrupt.c",
+          "path": "..\\User\\interrupt.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "MYDRIVERS",
+      "files": [
+        {
+          "name": "bsp_power.c",
+          "path": "..\\mydrivers\\Power\\bsp_power.c",
+          "type": 1
+        },
+        {
+          "name": "bsp_hw_i2c.c",
+          "path": "..\\mydrivers\\MyI2C\\bsp_hw_i2c.c",
+          "type": 1
+        },
+        {
+          "name": "bsp_i2c.c",
+          "path": "..\\mydrivers\\MyI2C\\bsp_i2c.c",
+          "type": 1
+        },
+        {
+          "name": "IPA1322.c",
+          "path": "..\\mydrivers\\IPA1322\\IPA1322.c",
+          "type": 1
+        },
+        {
+          "name": "vt2102_hal.c",
+          "path": "..\\mydrivers\\IPA1322\\vt2102_hal.c",
+          "type": 1
+        },
+        {
+          "name": "SpO2.c",
+          "path": "..\\mydrivers\\SpO2\\SpO2.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "BSP",
+      "files": [
+        {
+          "name": "board.c",
+          "path": "..\\mydrivers\\Board\\board.c",
+          "type": 1
+        },
+        {
+          "name": "clock.c",
+          "path": "..\\mydrivers\\Board\\clock.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "RTOS",
+      "files": [
+        {
+          "name": "clock.c",
+          "path": "..\\RTOS\\src\\clock.c",
+          "type": 1
+        },
+        {
+          "name": "components.c",
+          "path": "..\\RTOS\\src\\components.c",
+          "type": 1
+        },
+        {
+          "name": "cpu.c",
+          "path": "..\\RTOS\\src\\cpu.c",
+          "type": 1
+        },
+        {
+          "name": "idle.c",
+          "path": "..\\RTOS\\src\\idle.c",
+          "type": 1
+        },
+        {
+          "name": "ipc.c",
+          "path": "..\\RTOS\\src\\ipc.c",
+          "type": 1
+        },
+        {
+          "name": "irq.c",
+          "path": "..\\RTOS\\src\\irq.c",
+          "type": 1
+        },
+        {
+          "name": "kservice.c",
+          "path": "..\\RTOS\\src\\kservice.c",
+          "type": 1
+        },
+        {
+          "name": "mem.c",
+          "path": "..\\RTOS\\src\\mem.c",
+          "type": 1
+        },
+        {
+          "name": "object.c",
+          "path": "..\\RTOS\\src\\object.c",
+          "type": 1
+        },
+        {
+          "name": "scheduler.c",
+          "path": "..\\RTOS\\src\\scheduler.c",
+          "type": 1
+        },
+        {
+          "name": "thread.c",
+          "path": "..\\RTOS\\src\\thread.c",
+          "type": 1
+        },
+        {
+          "name": "timer.c",
+          "path": "..\\RTOS\\src\\timer.c",
+          "type": 1
+        },
+        {
+          "name": "cpuport.c",
+          "path": "..\\RTOS\\libcpu\\cpuport.c",
+          "type": 1
+        },
+        {
+          "name": "context_rvds.S",
+          "path": "..\\RTOS\\libcpu\\context_rvds.S",
+          "type": 2
+        }
+      ]
+    },
+    {
+      "name": "BLE_STACK",
+      "files": [
+        {
+          "name": "n32wb452_ble_api.c",
+          "path": "..\\BLE_Driver\\n32wb452_ble_api.c",
+          "type": 1
+        },
+        {
+          "name": "n32wb452_data_fifo.c",
+          "path": "..\\BLE_Driver\\api\\src\\n32wb452_data_fifo.c",
+          "type": 1
+        },
+        {
+          "name": "hl_test.c",
+          "path": "..\\BLE_Driver\\hl_test.c",
+          "type": 1
+        },
+        {
+          "name": "app.c",
+          "path": "..\\BLE_Driver\\profile\\src\\app.c",
+          "type": 1
+        },
+        {
+          "name": "app_batt.c",
+          "path": "..\\BLE_Driver\\profile\\src\\app_batt.c",
+          "type": 1
+        },
+        {
+          "name": "app_sec.c",
+          "path": "..\\BLE_Driver\\profile\\src\\app_sec.c",
+          "type": 1
+        },
+        {
+          "name": "app_task.c",
+          "path": "..\\BLE_Driver\\profile\\src\\app_task.c",
+          "type": 1
+        },
+        {
+          "name": "app_user.c",
+          "path": "..\\BLE_Driver\\profile\\src\\app_user.c",
+          "type": 1
+        },
+        {
+          "name": "bass.c",
+          "path": "..\\BLE_Driver\\profile\\src\\bass.c",
+          "type": 1
+        },
+        {
+          "name": "bass_task.c",
+          "path": "..\\BLE_Driver\\profile\\src\\bass_task.c",
+          "type": 1
+        },
+        {
+          "name": "prf.c",
+          "path": "..\\BLE_Driver\\profile\\src\\prf.c",
+          "type": 1
+        },
+        {
+          "name": "prf_utils.c",
+          "path": "..\\BLE_Driver\\profile\\src\\prf_utils.c",
+          "type": 1
+        },
+        {
+          "name": "user.c",
+          "path": "..\\BLE_Driver\\profile\\src\\user.c",
+          "type": 1
+        },
+        {
+          "name": "user_task.c",
+          "path": "..\\BLE_Driver\\profile\\src\\user_task.c",
+          "type": 1
+        },
+        {
+          "name": "Eif_debug.c",
+          "path": "..\\BLE_Driver\\platform\\src\\Eif_debug.c",
+          "type": 1
+        },
+        {
+          "name": "Eif_flash.c",
+          "path": "..\\BLE_Driver\\platform\\src\\Eif_flash.c",
+          "type": 1
+        },
+        {
+          "name": "Eif_timer.c",
+          "path": "..\\BLE_Driver\\platform\\src\\Eif_timer.c",
+          "type": 1
+        },
+        {
+          "name": "Interface.c",
+          "path": "..\\BLE_Driver\\platform\\src\\Interface.c",
+          "type": 1
+        },
+        {
+          "name": "bsp_timer.c",
+          "path": "..\\BLE_Driver\\bsp\\bsp_timer.c",
+          "type": 1
+        },
+        {
+          "name": "log.c",
+          "path": "..\\BLE_Driver\\bsp\\log.c",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "name": "LIB",
+      "files": [
+        {
+          "name": "arm_cortexM4lf_math.lib",
+          "path": "..\\Library\\DSP\\Lib\\arm_cortexM4lf_math.lib",
+          "type": 4
+        },
+        {
+          "name": "host_16bit.lib",
+          "path": "..\\BLE_Driver\\lib\\Keil\\host_16bit.lib",
+          "type": 4
+        },
+        {
+          "name": "n32wb452_ble_16bit.lib",
+          "path": "..\\BLE_Driver\\lib\\Keil\\n32wb452_ble_16bit.lib",
+          "type": 4
+        }
+      ]
+    },
+    {
+      "name": "SEGGER_RTT",
+      "files": [
+        {
+          "name": "SEGGER_RTT.c",
+          "path": "..\\segger_rtt\\SEGGER_RTT.c",
+          "type": 1
+        },
+        {
+          "name": "SEGGER_RTT_printf.c",
+          "path": "..\\segger_rtt\\SEGGER_RTT_printf.c",
+          "type": 1
+        },
+        {
+          "name": "rtt_heartbeat_template.c",
+          "path": "..\\segger_rtt\\rtt_heartbeat_template.c",
+          "type": 1
+        },
+        {
+          "name": "SEGGER_RTT.h",
+          "path": "..\\segger_rtt\\SEGGER_RTT.h",
+          "type": 5
+        },
+        {
+          "name": "SEGGER_RTT_Conf.h",
+          "path": "..\\segger_rtt\\SEGGER_RTT_Conf.h",
+          "type": 5
+        }
+      ]
+    },
+    {
+      "name": "SEGGER_SYSVIEW",
+      "files": [
+        {
+          "name": "SEGGER_SYSVIEW.c",
+          "path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\segger_systemview\\SEGGER_SYSVIEW.c",
+          "type": 1
+        },
+        {
+          "name": "SEGGER_SYSVIEW_RTThread.c",
+          "path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\segger_systemview\\SEGGER_SYSVIEW_RTThread.c",
+          "type": 1
+        },
+        {
+          "name": "SEGGER_SYSVIEW_Config_RTThread.c",
+          "path": "G:\\5-研究生（生医工）\\8-可穿戴\\血氧戒指定\\嵌入式代码\\rt_thread_ipa1322\\segger_systemview\\SEGGER_SYSVIEW_Config_RTThread.c",
+          "type": 1
+        }
+      ]
+    }
+  ]
+}

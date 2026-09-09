@@ -1,0 +1,23 @@
+[project_search_path]: ./
+[map_search_path]: ./
+[project_file_path]: .//rt_thread_ipa1322.uvprojx
+[ map_file_path]: .//Listings/N32WB452_BLE_RTOS.map
+[parse_keil_map start]: 
+[Found keyword]: ----------Execution Region----------
+[name]:  ER_IROM1 
+[Exec base]: 0x8000000
+[Size]: 0x39928
+[Max]: 0x4e000
+[Found keyword]: ----------Execution Region----------
+[name]:  RW_IRAM1 
+[Exec base]: 0x20000000
+[Size]: 0x13660
+[Max]: 0x24000
+[parse_keil_map over printf bar]: 
+  RW_IRAM1 :0x20000000
+  144.00 KB :|¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö__________|   53.88 % (   77.59 KB /   144.00 KB) [68000 B]
+  ER_IROM1 :0x8000000
+  312.00 KB :|¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö¡ö______|   73.81 % (  230.29 KB /   312.00 KB) [83672 B]
+[export csv]: ./N32WB452_BLE_RTOS_sort_by_flash.csv
+[export csv]: ./N32WB452_BLE_RTOS_sort_by_ram.csv
+[export xlsx]: N32WB452_BLE_RTOS_analysis.xlsx
